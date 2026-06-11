@@ -729,23 +729,84 @@ async function guardarPredFase() {
 async function renderTabla() {
   const cont = document.getElementById('ucontent-tabla');
   cont.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
-  const { data: users } = await db.from('usuarios').select('*');
+  const [
+    { data: users },
+    cfg,
+    { data: preds },
+    { data: todosProno },
+    { data: todosPartidos },
+  ] = await Promise.all([
+    db.from('usuarios').select('*'),
+    getConfig(),
+    db.from('predicciones_iniciales').select('codigo'),
+    db.from('pronosticos').select('codigo_usuario, partido_id'),
+    db.from('partidos').select('id, fase'),
+  ]);
   if (!users?.length) { cont.innerHTML = '<div class="empty"><span>👥</span>Sin usuarios</div>'; return; }
-  // Calcular puntos en tiempo real
+
   const puntos = await calcularPuntosTabla(users);
   const sorted = [...users].sort((a,b)=>(puntos[b.codigo]||0)-(puntos[a.codigo]||0));
+
+  // Quién completó predicciones generales
+  const predSet = new Set(preds?.map(p => p.codigo));
+
+  // Quién cargó pronósticos por fase
+  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
+  const fasesAbiertas = FASES.filter(f => fasesHab[f.id]);
+  const partidosPorFase = {};
+  todosPartidos?.forEach(p => {
+    if (!partidosPorFase[p.fase]) partidosPorFase[p.fase] = [];
+    partidosPorFase[p.fase].push(p.id);
+  });
+  // pronósticos por usuario y fase
+  const pronosPorUsuarioFase = {};
+  todosProno?.forEach(pr => {
+    const partido = todosPartidos?.find(p => p.id === pr.partido_id);
+    if (!partido) return;
+    const key = `${pr.codigo_usuario}_${partido.fase}`;
+    if (!pronosPorUsuarioFase[key]) pronosPorUsuarioFase[key] = 0;
+    pronosPorUsuarioFase[key]++;
+  });
+
   let html = `<div class="card"><div class="card-title">🏅 TABLA DE POSICIONES</div>`;
   sorted.forEach((u,i) => {
     const p = puntos[u.codigo]||0;
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
     const isMe = u.codigo===me.codigo;
+
+    // Estado predicciones generales
+    const tienePred = predSet.has(u.codigo);
+    const predIcon = cfg.pred_abiertas === 'true'
+      ? (tienePred ? '✅' : '⏳')
+      : '';
+
+    // Estado por fase abierta
+    const faseIcons = fasesAbiertas.map(f => {
+      const total = partidosPorFase[f.id]?.length || 0;
+      const cargados = pronosPorUsuarioFase[`${u.codigo}_${f.id}`] || 0;
+      return total > 0 ? (cargados >= total ? '✅' : cargados > 0 ? '⚠️' : '⏳') : null;
+    }).filter(Boolean);
+
+    const badges = [predIcon, ...faseIcons].filter(Boolean).join(' ');
+
     html += `<div class="tabla-row${isMe?' me':''}">
       <span style="font-size:1.1rem;width:26px">${medal}</span>
-      <span style="flex:1;font-weight:600">${u.nombre}${isMe?' <span style="font-size:0.68rem;color:var(--gold)">(vos)</span>':''}</span>
+      <div style="flex:1">
+        <div style="font-weight:600">${u.nombre}${isMe?' <span style="font-size:0.68rem;color:var(--gold)">(vos)</span>':''}</div>
+        ${badges ? `<div style="font-size:0.72rem;color:var(--muted);margin-top:2px">${badges}</div>` : ''}
+      </div>
       <button class="detail-btn" onclick="openDetalle('${u.codigo}')">📊 Detalle</button>
       <span class="tabla-pts">${p}</span>
     </div>`;
   });
+
+  // Leyenda
+  if (fasesAbiertas.length || cfg.pred_abiertas === 'true') {
+    html += `<div style="font-size:0.72rem;color:var(--muted);margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px">
+      ✅ Completado &nbsp;⚠️ Parcial &nbsp;⏳ Sin cargar
+      ${cfg.pred_abiertas === 'true' ? '&nbsp;· primer ícono = predicciones generales' : ''}
+    </div>`;
+  }
   html += `</div>`;
   cont.innerHTML = html;
 }
@@ -968,19 +1029,63 @@ function adminTab(t) {
 async function renderAdminUsers() {
   const cont = document.getElementById('acontent-usuarios');
   cont.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
-  const cfg = await getConfig();
+  const [
+    cfg,
+    { data: users },
+    { data: preds },
+    { data: todosProno },
+    { data: todosPartidos },
+  ] = await Promise.all([
+    getConfig(),
+    db.from('usuarios').select('*').order('created_at'),
+    db.from('predicciones_iniciales').select('*'),
+    db.from('pronosticos').select('codigo_usuario, partido_id'),
+    db.from('partidos').select('id, fase'),
+  ]);
+
   const predAbiertas = cfg.pred_abiertas === 'true';
-  const { data: users } = await db.from('usuarios').select('*').order('created_at');
-  const puntos = users?.length ? await calcularPuntosTabla(users) : {};
-  const { data: preds } = await db.from('predicciones_iniciales').select('*');
   const predMap = {}; preds?.forEach(p => predMap[p.codigo] = p);
+  const predSet = new Set(preds?.map(p => p.codigo));
+  const puntos = users?.length ? await calcularPuntosTabla(users) : {};
+
+  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
+  const fasesAbiertas = FASES.filter(f => fasesHab[f.id]);
+  const partidosPorFase = {};
+  todosPartidos?.forEach(p => {
+    if (!partidosPorFase[p.fase]) partidosPorFase[p.fase] = [];
+    partidosPorFase[p.fase].push(p.id);
+  });
+  const pronosPorUsuarioFase = {};
+  todosProno?.forEach(pr => {
+    const partido = todosPartidos?.find(p => p.id === pr.partido_id);
+    if (!partido) return;
+    const key = `${pr.codigo_usuario}_${partido.fase}`;
+    if (!pronosPorUsuarioFase[key]) pronosPorUsuarioFase[key] = 0;
+    pronosPorUsuarioFase[key]++;
+  });
+
   let html = `<div class="card"><div class="card-title">👥 USUARIOS REGISTRADOS</div>`;
   if (!users?.length) html += `<div class="empty"><span>👤</span>Sin usuarios aún</div>`;
   else {
     const sorted = [...users].sort((a,b)=>(puntos[b.codigo]||0)-(puntos[a.codigo]||0));
     sorted.forEach(u => {
+      const tienePred = predSet.has(u.codigo);
+
+      // Badges de estado
+      let badges = '';
+      if (predAbiertas) badges += `<span title="Predicciones generales" style="font-size:0.7rem">${tienePred?'✅':'⏳'} Generales</span>`;
+      fasesAbiertas.forEach(f => {
+        const total = partidosPorFase[f.id]?.length || 0;
+        const cargados = pronosPorUsuarioFase[`${u.codigo}_${f.id}`] || 0;
+        const icon = total > 0 ? (cargados >= total ? '✅' : cargados > 0 ? '⚠️' : '⏳') : null;
+        if (icon) badges += `<span title="${f.label}" style="font-size:0.7rem">${icon} ${f.short}</span>`;
+      });
+
       html += `<div class="admin-user-row">
-        <div style="flex:1"><div class="aname">${u.nombre}</div><div style="color:var(--muted);font-size:0.8rem">${puntos[u.codigo]||0} puntos</div></div>
+        <div style="flex:1">
+          <div class="aname">${u.nombre}</div>
+          <div style="color:var(--muted);font-size:0.8rem;display:flex;gap:8px;flex-wrap:wrap;margin-top:3px">${badges||'<span style="font-size:0.7rem">Sin fases abiertas</span>'}</div>
+        </div>
         <div class="acode">${u.codigo}</div>
         <div class="admin-actions">
           <button class="btn btn-ghost btn-sm" onclick="openDetalle('${u.codigo}')">📊</button>
