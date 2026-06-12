@@ -1099,7 +1099,7 @@ async function renderAdminUsers() {
     });
   }
   html += `</div><div class="card"><div class="card-title">📋 PREDICCIONES INICIALES</div>`;
-  if (users?.length) {
+  if (users?.length && !predAbiertas) {
     html += `<button class="btn btn-gold btn-full" onclick="exportSnapshotGenerales()" style="margin-bottom:14px">📸 Exportar snapshot de predicciones generales</button>`;
   }
   if (predAbiertas) {
@@ -1441,6 +1441,9 @@ async function renderAdminPronos() {
     return;
   }
 
+  const cfg = await getConfig();
+  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
+
   // Pills de fases que tienen partidos
   const fasesConPartidos = FASES.filter(f => todosPartidos.some(p => p.fase === f.id));
   if (!fasesConPartidos.find(f => f.id === curFasePronos)) curFasePronos = fasesConPartidos[0]?.id;
@@ -1464,9 +1467,15 @@ async function renderAdminPronos() {
   });
   selector += `</div>`;
 
+  // El snapshot solo se puede generar si la fase está CERRADA (no habilitada)
+  const faseAbierta = fasesHab[curFasePronos] === true;
+  const snapshotBtn = faseAbierta
+    ? `<div class="alert alert-info" style="margin-bottom:14px">🔒 El snapshot de esta fecha estará disponible cuando se cierre el plazo de pronósticos.</div>`
+    : `<button class="btn btn-gold btn-full" onclick="exportSnapshotFase()" style="margin-bottom:14px">📸 Exportar snapshot de esta fecha</button>`;
+
   cont.innerHTML = `<div class="card"><div class="card-title">👁 PRONÓSTICOS POR PARTIDO</div>
     ${pills}
-    <button class="btn btn-gold btn-full" onclick="exportSnapshotFase()" style="margin-bottom:14px">📸 Exportar snapshot de esta fecha</button>
+    ${snapshotBtn}
     ${selector}<div id="pronos-body"><div class="loading"><div class="spinner"></div></div></div></div>`;
   await renderPronosPartido();
 }
