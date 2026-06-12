@@ -6,6 +6,7 @@
 <title>Prode Mundial 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root {
   --bg:#0a0a0f;--bg2:#111118;--bg3:#18181f;--border:rgba(255,255,255,0.07);
@@ -1470,15 +1471,47 @@ async function renderAdminPronos() {
   await renderPronosPartido();
 }
 
-// — SNAPSHOT EXPORT —
-function descargarArchivo(filename, content) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+// — SNAPSHOT EXPORT (PDF) —
+function nuevoPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  return doc;
+}
+
+function checkPageBreak(doc, y, margin = 20) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  if (y > pageHeight - margin) {
+    doc.addPage();
+    return 20;
+  }
+  return y;
+}
+
+function addHeaderPDF(doc, titulo, subtitulo) {
+  let y = 20;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('🏆 PRODE MUNDIAL 2026', 105, y, { align: 'center' });
+  y += 8;
+  doc.setFontSize(13);
+  doc.text(titulo, 105, y, { align: 'center' });
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(120,120,120);
+  doc.text(`Generado el: ${timestampStr()}`, 105, y, { align: 'center' });
+  y += 5;
+  if (subtitulo) {
+    const lines = doc.splitTextToSize(subtitulo, 170);
+    doc.text(lines, 105, y, { align: 'center' });
+    y += lines.length * 4.5;
+  }
+  doc.setTextColor(0,0,0);
+  y += 4;
+  doc.setDrawColor(200,200,200);
+  doc.line(20, y, 190, y);
+  y += 8;
+  return y;
 }
 
 function timestampStr() {
@@ -1509,22 +1542,27 @@ async function exportSnapshotFase() {
     pronoMap[pr.partido_id][pr.codigo_usuario] = pr;
   });
 
-  let out = '';
-  out += `═══════════════════════════════════════════\n`;
-  out += `  SNAPSHOT DE PREDICCIONES — PRODE MUNDIAL 2026\n`;
-  out += `  ${fase.label}\n`;
-  out += `  Generado el: ${timestampStr()}\n`;
-  out += `═══════════════════════════════════════════\n\n`;
-  out += `Este archivo es una foto congelada de los pronósticos de todos\n`;
-  out += `los participantes al momento de su generación, antes de que\n`;
-  out += `empiecen los partidos de esta fecha.\n\n`;
+  const doc = nuevoPDF();
+  let y = addHeaderPDF(doc, fase.label,
+    'Foto congelada de los pronósticos de todos los participantes al momento de su generación, antes de que empiecen los partidos de esta fecha.');
 
   partidos.forEach(p => {
-    out += `-----------------------------------------------\n`;
-    out += `${p.es_bonus ? '⭐ [BONUS - Resultado exacto] ' : ''}${p.local} vs ${p.visitante}\n`;
-    out += `-----------------------------------------------\n`;
+    y = checkPageBreak(doc, y, 35);
+    doc.setFillColor(245,200,66);
+    doc.rect(20, y-4, 170, 7, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(20,20,20);
+    const titulo = `${p.es_bonus ? '⭐ BONUS — ' : ''}${p.local} vs ${p.visitante}`;
+    doc.text(titulo, 22, y);
+    doc.setTextColor(0,0,0);
+    y += 7;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
 
     usuarios?.forEach(u => {
+      y = checkPageBreak(doc, y);
       const pr = pronoMap[p.id]?.[u.codigo];
       let val = 'Sin pronóstico';
       if (pr) {
@@ -1534,14 +1572,16 @@ async function exportSnapshotFase() {
           val = pr.resultado === '1' ? p.local : pr.resultado === '2' ? p.visitante : pr.resultado === 'x' ? 'Empate' : 'Sin pronóstico';
         }
       }
-      out += `  ${u.nombre.padEnd(28,' ')} -> ${val}\n`;
+      doc.text(u.nombre, 24, y);
+      doc.text(val, 130, y);
+      y += 5.5;
     });
-    out += `\n`;
+    y += 4;
   });
 
   const safeName = fase.label.replace(/[^a-zA-Z0-9]/g,'_');
   const dateStr = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
-  descargarArchivo(`snapshot_${safeName}_${dateStr}.txt`, out);
+  doc.save(`snapshot_${safeName}_${dateStr}.pdf`);
 }
 
 async function exportSnapshotGenerales() {
@@ -1557,32 +1597,47 @@ async function exportSnapshotGenerales() {
 
   const predMap = {}; preds?.forEach(p => predMap[p.codigo] = p);
 
-  let out = '';
-  out += `═══════════════════════════════════════════\n`;
-  out += `  SNAPSHOT DE PREDICCIONES GENERALES\n`;
-  out += `  PRODE MUNDIAL 2026\n`;
-  out += `  Generado el: ${timestampStr()}\n`;
-  out += `═══════════════════════════════════════════\n\n`;
-  out += `Este archivo es una foto congelada de las predicciones iniciales\n`;
-  out += `de todos los participantes (Campeón, Subcampeón, Mejor Arquero,\n`;
-  out += `Jugador Joven, Goleador y Mejor Jugador) al momento de su generación,\n`;
-  out += `antes de que empiece el mundial.\n\n`;
+  const doc = nuevoPDF();
+  let y = addHeaderPDF(doc, 'Predicciones Generales',
+    'Foto congelada de las predicciones iniciales (Campeón, Subcampeón, Mejor Arquero, Jugador Joven, Goleador y Mejor Jugador) de todos los participantes, antes de que empiece el mundial.');
+
+  const campos = [
+    ['Campeón', 'campeon'],
+    ['Subcampeón', 'subcampeon'],
+    ['Mejor Arquero', 'sorpresa'],
+    ['Jugador Joven Sub-21', 'decepcion'],
+    ['Goleador', 'goleador'],
+    ['Mejor Jugador', 'mejor_jugador'],
+  ];
 
   usuarios.forEach(u => {
+    y = checkPageBreak(doc, y, 45);
     const p = predMap[u.codigo] || {};
-    out += `-----------------------------------------------\n`;
-    out += `${u.nombre}\n`;
-    out += `-----------------------------------------------\n`;
-    out += `  Campeón:              ${p.campeon || '(sin definir)'}\n`;
-    out += `  Subcampeón:           ${p.subcampeon || '(sin definir)'}\n`;
-    out += `  Mejor Arquero:        ${p.sorpresa || '(sin definir)'}\n`;
-    out += `  Jugador Joven Sub-21: ${p.decepcion || '(sin definir)'}\n`;
-    out += `  Goleador:             ${p.goleador || '(sin definir)'}\n`;
-    out += `  Mejor Jugador:        ${p.mejor_jugador || '(sin definir)'}\n\n`;
+
+    doc.setFillColor(245,200,66);
+    doc.rect(20, y-4, 170, 7, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(20,20,20);
+    doc.text(u.nombre, 22, y);
+    doc.setTextColor(0,0,0);
+    y += 8;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    campos.forEach(([label, key]) => {
+      y = checkPageBreak(doc, y);
+      doc.setFont('helvetica','bold');
+      doc.text(`${label}:`, 24, y);
+      doc.setFont('helvetica','normal');
+      doc.text(p[key] || '(sin definir)', 75, y);
+      y += 5.5;
+    });
+    y += 5;
   });
 
   const dateStr = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
-  descargarArchivo(`snapshot_predicciones_generales_${dateStr}.txt`, out);
+  doc.save(`snapshot_predicciones_generales_${dateStr}.pdf`);
 }
 
 async function setFasePronos(id) {
