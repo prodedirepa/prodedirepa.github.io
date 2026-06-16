@@ -257,6 +257,36 @@ select option{background:#1a1a24;}
   </div>
 </div>
 
+<!-- SECRET GAMES MENU -->
+<div id="screen-games-menu" class="screen">
+  <div class="header">
+    <h2 style="font-family:var(--fd);color:var(--gold);letter-spacing:2px">🕹️ ARCADE SECRETO</h2>
+    <button class="btn btn-ghost btn-sm" onclick="exitGamesMenu()">✕ Salir</button>
+  </div>
+  <div class="container" style="max-width:420px">
+    <div class="card" style="cursor:pointer" onclick="enter2048()">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:2.2rem">🔢</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:1rem">2048</div>
+          <div style="font-size:0.78rem;color:var(--muted)">Combiná fichas hasta llegar a 2048</div>
+        </div>
+        <div style="color:var(--muted)">→</div>
+      </div>
+    </div>
+    <div class="card" style="cursor:pointer" onclick="enterClicker()">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:2.2rem">⚽</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:1rem">Club Manager Clicker</div>
+          <div style="font-size:0.78rem;color:var(--muted)">Armá tu club desde cero hasta ser un gigante mundial</div>
+        </div>
+        <div style="color:var(--muted)">→</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- SECRET 2048 GAME SCREEN -->
 <div id="screen-2048" class="screen">
   <div class="header">
@@ -282,6 +312,46 @@ select option{background:#1a1a24;}
       </div>
     </div>
     <p style="font-size:0.74rem;color:var(--muted);margin-top:14px;text-align:center">Usá las flechas del teclado o deslizá con el dedo para mover las fichas. Llegá a 2048 🏆</p>
+  </div>
+</div>
+
+<!-- SECRET CLICKER GAME SCREEN -->
+<div id="screen-clicker" class="screen">
+  <div class="header">
+    <h2 style="font-family:var(--fd);color:var(--gold);letter-spacing:2px">⚽ CLUB MANAGER</h2>
+    <button class="btn btn-ghost btn-sm" onclick="exitClicker()">✕ Salir</button>
+  </div>
+  <div class="container" style="max-width:520px">
+
+    <div class="card" style="text-align:center;padding:20px;background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(255,107,53,0.05));border-color:rgba(245,200,66,0.3)">
+      <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px" id="ck-club-name">Club Amateur FC</div>
+      <div id="ck-money" style="font-family:var(--fm);font-size:2.1rem;font-weight:700;color:var(--gold)">$0</div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">por click: $<span id="ck-per-click">1</span> · por seg: $<span id="ck-per-sec">0</span></div>
+    </div>
+
+    <div style="display:flex;justify-content:center;margin:20px 0">
+      <button id="ck-ball" onclick="clickerEarn()" style="width:140px;height:140px;border-radius:50%;border:none;background:radial-gradient(circle at 35% 30%, #fff, #e8e8e8 45%, #555 100%);font-size:3rem;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.4);transition:transform 0.08s">⚽</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">👥 JUGADORES <span style="font-size:0.7rem;color:var(--muted);font-weight:400" id="ck-players-count">(0/5)</span></div>
+      <div id="ck-players-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏟️ INSTALACIONES</div>
+      <div id="ck-buildings-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏆 RANKING DE CLUBES</div>
+      <div id="ck-ranking-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <div class="card" style="text-align:center">
+      <button class="btn btn-danger btn-sm" onclick="resetClickerConfirm()">🗑 Reiniciar progreso</button>
+    </div>
+
   </div>
 </div>
 
@@ -2365,10 +2435,14 @@ function checkSecretPass() {
   const val = document.getElementById('secret-pass-input').value;
   if (val === SECRET_GAME_PASS) {
     closeSecretPrompt();
-    enter2048();
+    goTo('screen-games-menu');
   } else {
     document.getElementById('secret-pass-msg').innerHTML = '<div class="alert alert-err" style="font-size:0.8rem">Incorrecto</div>';
   }
+}
+
+function exitGamesMenu() {
+  goTo('screen-welcome');
 }
 
 function enter2048() {
@@ -2377,7 +2451,7 @@ function enter2048() {
 }
 
 function exit2048() {
-  goTo('screen-welcome');
+  goTo('screen-games-menu');
 }
 
 // ── Motor del juego 2048 ──
@@ -2535,6 +2609,349 @@ document.addEventListener('keydown', (e) => {
     }
   }, { passive: true });
 })();
+
+// ═══════════════════════════════════════════════
+// EASTER EGG SECRETO #2 — CLUB MANAGER CLICKER
+// ═══════════════════════════════════════════════
+const CK_STORAGE_KEY_BASE = 'club_manager_save';
+
+// Genera/recupera un ID único por navegador/dispositivo para separar el progreso de cada jugador
+function getCkDeviceId() {
+  let id = localStorage.getItem('ck_device_id');
+  if (!id) {
+    id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('ck_device_id', id);
+  }
+  return id;
+}
+function ckStorageKey() {
+  return `${CK_STORAGE_KEY_BASE}_${getCkDeviceId()}`;
+}
+
+// 5 posiciones fijas, cada una con 6 tiers de jugador para upgradear.
+// 4 posiciones de jugador + 1 de DT, cada una con 6 tiers de jugador para upgradear.
+// Tier 0 = posición vacía (sin jugador). Comprar tier 1 desbloquea la posición.
+// Cada tier siguiente reemplaza al anterior, sin reembolso, costo fijo creciente.
+// El tier 6 de cada posición es secreto: aparece como "???" hasta comprarlo.
+const CK_POSICIONES = ['ARQ','DEF','MED','DEL','DT'];
+const CK_POS_LABEL = { ARQ:'Arquero', DEF:'Defensor', MED:'Mediocampista', DEL:'Delantero', DT:'Director Técnico' };
+
+const CK_TIERS_NOMBRES = {
+  ARQ: ['Emanuel Tripodi', 'Cristian Luchetti', 'Agustin Orion', 'Marcelo Barovero', 'Franco Armaniqui', '???'],
+  DEF: ['Chiche Arano', 'Chiqui Perez', 'Cristian Tula', 'Carlos Izquierdoz', 'Timbita Lomonaco', '???'],
+  MED: ['Brian Sarmiento', 'Polaco Bastia', 'Pablo Perez', 'Nacho Fernandez', 'Fernando Gago', '???'],
+  DEL: ['Milton Gimenez', 'Leandro Caruso', 'Denis Stracqualursi', 'Danistone', 'El pipa Benedetto', '???'],
+  DT:  ['Claudio Úbeda', 'Gustavo Queenteros', 'Gustavo Costas', 'Gustavo Alfaro', 'Marcelo Gallardo', '???'],
+};
+
+// Nombres reales del tier 6, ocultos hasta que se compran
+const CK_TIER6_REAL = {
+  ARQ: 'Lucritas "el muro" Campitongo',
+  DEF: 'Gonzalo "la torre" Marzoa',
+  MED: 'Alejandro "pie de angel" Girona',
+  DEL: 'Julian "araña" Panaro',
+  DT:  'Eric "Discoteca" Worm',
+};
+
+// costoBase y bonusClick por tier (índice 0 = tier 1, ... índice 5 = tier 6)
+const CK_TIERS_COSTO =  [50,    400,    3000,   20000,  140000,  900000];
+const CK_TIERS_BONUS =  [1,     6,      35,     180,    950,     5000];
+
+function ckTierData(pos, tier, revelado) {
+  // tier va de 1 a 6. revelado=true muestra el nombre real del tier 6 (ya comprado)
+  const i = tier - 1;
+  let nombre = CK_TIERS_NOMBRES[pos][i];
+  if (tier === 6 && revelado) nombre = CK_TIER6_REAL[pos];
+  return {
+    nombre,
+    costo: CK_TIERS_COSTO[i],
+    bonus: CK_TIERS_BONUS[i],
+  };
+}
+
+// Definición de instalaciones (sin límite de cantidad, escalan en costo)
+const CK_BUILDINGS_POOL = [
+  { id:'b1', nombre:'Cancha de Entrenamiento', costoBase: 80,     prodBase: 1    },
+  { id:'b2', nombre:'Gimnasio',                costoBase: 600,    prodBase: 6    },
+  { id:'b3', nombre:'Centro Médico',           costoBase: 4500,   prodBase: 35   },
+  { id:'b4', nombre:'Hinchada Organizada',     costoBase: 25000,  prodBase: 180  },
+  { id:'b5', nombre:'Estadio Propio',          costoBase: 150000, prodBase: 950  },
+  { id:'b6', nombre:'Academia de Juveniles',   costoBase: 900000, prodBase: 5200 },
+];
+
+const CK_CLUB_NAMES = [
+  { umbral: 0,        nombre: 'Club Amateur FC' },
+  { umbral: 5000,     nombre: 'Deportivo Ascenso' },
+  { umbral: 50000,    nombre: 'Atlético Regional' },
+  { umbral: 500000,   nombre: 'Club Profesional' },
+  { umbral: 5000000,  nombre: 'Gigante Nacional' },
+  { umbral: 50000000, nombre: 'Potencia Continental' },
+  { umbral: 500000000,nombre: 'Club Mundialista' },
+];
+
+let ckState = {
+  money: 0,
+  totalEarned: 0,
+  perClickBase: 1,
+  positions: {},  // { ARQ: 0, DEF: 0, MED: 0, DEL: 0, DT: 0 } — 0 = vacía, 1-6 = tier actual
+  buildings: {},  // { b1: cantidad, ... }
+};
+let ckInterval = null;
+let ckSaveTimeout = null;
+
+function ckDefaultState() {
+  return {
+    money: 0, totalEarned: 0, perClickBase: 1,
+    positions: { ARQ:0, DEF:0, MED:0, DEL:0, DT:0 },
+    buildings: {},
+  };
+}
+
+async function enterClicker() {
+  goTo('screen-clicker');
+  await loadClickerState();
+  renderClicker();
+  if (ckInterval) clearInterval(ckInterval);
+  ckInterval = setInterval(clickerTick, 1000);
+}
+
+function exitClicker() {
+  if (ckInterval) { clearInterval(ckInterval); ckInterval = null; }
+  saveClickerState(); // guardado final al salir
+  goTo('screen-games-menu');
+}
+
+async function loadClickerState() {
+  try {
+    const { data } = await db.from('configuracion').select('valor').eq('clave', ckStorageKey()).single();
+    if (data && data.valor) {
+      const parsed = JSON.parse(data.valor);
+      ckState = { ...ckDefaultState(), ...parsed, positions: { ...ckDefaultState().positions, ...(parsed.positions||{}) } };
+    } else {
+      ckState = ckDefaultState();
+    }
+  } catch (e) {
+    // No existe el registro aún (primera vez) — arrancamos de cero
+    ckState = ckDefaultState();
+  }
+}
+
+function saveClickerState() {
+  clearTimeout(ckSaveTimeout);
+  ckSaveTimeout = setTimeout(async () => {
+    try {
+      await db.from('configuracion').upsert({ clave: ckStorageKey(), valor: JSON.stringify(ckState) }, { onConflict: 'clave' });
+    } catch (e) { console.error('Error guardando progreso del clicker:', e); }
+  }, 600); // debounce para no saturar de requests
+}
+
+function ckPerClick() {
+  let total = ckState.perClickBase;
+  CK_POSICIONES.forEach(pos => {
+    const tier = ckState.positions[pos] || 0;
+    if (tier > 0) total += ckTierData(pos, tier).bonus;
+  });
+  return total;
+}
+
+function ckPerSec() {
+  let total = 0;
+  CK_BUILDINGS_POOL.forEach(b => {
+    const cant = ckState.buildings[b.id] || 0;
+    total += cant * b.prodBase;
+  });
+  return total;
+}
+
+function ckPositionsFilled() {
+  return CK_POSICIONES.filter(pos => (ckState.positions[pos]||0) > 0).length;
+}
+
+function ckBuildingCost(b) {
+  const cant = ckState.buildings[b.id] || 0;
+  return Math.floor(b.costoBase * Math.pow(1.15, cant));
+}
+
+function ckClubName() {
+  let nombre = CK_CLUB_NAMES[0].nombre;
+  CK_CLUB_NAMES.forEach(n => { if (ckState.totalEarned >= n.umbral) nombre = n.nombre; });
+  return nombre;
+}
+
+function fmtMoney(n) {
+  n = Math.floor(n);
+  if (n >= 1e12) return '$' + (n/1e12).toFixed(2) + 'T';
+  if (n >= 1e9)  return '$' + (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6)  return '$' + (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3)  return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toLocaleString('es-AR');
+}
+
+function clickerEarn() {
+  const gain = ckPerClick();
+  ckState.money += gain;
+  ckState.totalEarned += gain;
+  renderClickerNumbers();
+  saveClickerState();
+  // micro-animación del botón
+  const ball = document.getElementById('ck-ball');
+  if (ball) {
+    ball.style.transform = 'scale(0.92)';
+    setTimeout(() => { ball.style.transform = 'scale(1)'; }, 80);
+  }
+}
+
+function clickerTick() {
+  const gain = ckPerSec();
+  if (gain > 0) {
+    ckState.money += gain;
+    ckState.totalEarned += gain;
+    renderClickerNumbers();
+    saveClickerState();
+  }
+}
+
+function renderClickerNumbers() {
+  const elMoney = document.getElementById('ck-money');
+  const elPerClick = document.getElementById('ck-per-click');
+  const elPerSec = document.getElementById('ck-per-sec');
+  const elName = document.getElementById('ck-club-name');
+  if (elMoney) elMoney.textContent = fmtMoney(ckState.money);
+  if (elPerClick) elPerClick.textContent = fmtMoney(ckPerClick()).replace('$','');
+  if (elPerSec) elPerSec.textContent = fmtMoney(ckPerSec()).replace('$','');
+  if (elName) elName.textContent = ckClubName();
+}
+
+function renderClicker() {
+  renderClickerNumbers();
+  renderCkRanking();
+
+  // Posiciones (5 fijas, cada una con 6 tiers de jugador)
+  const playersList = document.getElementById('ck-players-list');
+  const playersCount = document.getElementById('ck-players-count');
+  if (playersCount) playersCount.textContent = `(${ckPositionsFilled()}/5)`;
+  if (playersList) {
+    let html = '';
+    CK_POSICIONES.forEach(pos => {
+      const tierActual = ckState.positions[pos] || 0;
+      const vacia = tierActual === 0;
+      const maxTier = tierActual >= 6;
+
+      if (vacia) {
+        // Mostrar opción para comprar tier 1 y desbloquear la posición
+        const t1 = ckTierData(pos, 1);
+        const canAfford = ckState.money >= t1.costo;
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.86rem">${CK_POS_LABEL[pos]} <span style="font-size:0.68rem;color:var(--muted)">· posición vacía</span></div>
+            <div style="font-size:0.74rem;color:var(--muted)">${t1.nombre} · +${fmtMoney(t1.bonus).replace('$','')} por click</div>
+          </div>
+          <button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(t1.costo)}</button>
+        </div>`;
+      } else {
+        const actual = ckTierData(pos, tierActual, true); // revelado=true: si es tier 6, ya fue comprado y se muestra el nombre real
+        let extra = '';
+        if (maxTier) {
+          extra = `<span style="font-size:0.78rem;color:var(--gold);font-weight:700">⭐ Nivel máximo</span>`;
+        } else {
+          const sig = ckTierData(pos, tierActual + 1);
+          const canAfford = ckState.money >= sig.costo;
+          extra = `<button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">⬆ ${fmtMoney(sig.costo)}</button>`;
+        }
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(0,214,143,0.08);border:1px solid var(--green);border-radius:10px">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.86rem">${CK_POS_LABEL[pos]} <span style="font-size:0.68rem;color:var(--gold)">· Tier ${tierActual}/6</span></div>
+            <div style="font-size:0.74rem;color:var(--muted)">${actual.nombre} · +${fmtMoney(actual.bonus).replace('$','')} por click</div>
+          </div>
+          ${extra}
+        </div>`;
+      }
+    });
+    playersList.innerHTML = html;
+  }
+
+  // Instalaciones
+  const buildingsList = document.getElementById('ck-buildings-list');
+  if (buildingsList) {
+    let html = '';
+    CK_BUILDINGS_POOL.forEach(b => {
+      const cant = ckState.buildings[b.id] || 0;
+      const costo = ckBuildingCost(b);
+      const canAfford = ckState.money >= costo;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:0.86rem">${b.nombre} ${cant > 0 ? `<span style="font-size:0.72rem;color:var(--gold)">x${cant}</span>` : ''}</div>
+          <div style="font-size:0.74rem;color:var(--muted)">+${fmtMoney(b.prodBase).replace('$','')}/seg cada una</div>
+        </div>
+        <button class="btn btn-sm ${canAfford ? 'btn-primary' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerBuilding('${b.id}')" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(costo)}</button>
+      </div>`;
+    });
+    buildingsList.innerHTML = html;
+  }
+}
+
+async function renderCkRanking() {
+  const el = document.getElementById('ck-ranking-list'); if (!el) return;
+  try {
+    const { data } = await db.from('configuracion').select('clave, valor').like('clave', `${CK_STORAGE_KEY_BASE}_%`);
+    if (!data?.length) { el.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">Todavía no hay otros clubes registrados.</div>`; return; }
+
+    const miClave = ckStorageKey();
+    const clubes = data.map(row => {
+      let parsed = {};
+      try { parsed = JSON.parse(row.valor); } catch {}
+      const totalEarned = parsed.totalEarned || 0;
+      let nombre = CK_CLUB_NAMES[0].nombre;
+      CK_CLUB_NAMES.forEach(n => { if (totalEarned >= n.umbral) nombre = n.nombre; });
+      return { clave: row.clave, nombre, totalEarned, esMio: row.clave === miClave };
+    }).sort((a,b) => b.totalEarned - a.totalEarned);
+
+    let html = '';
+    clubes.slice(0, 10).forEach((c, i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${c.esMio?'rgba(245,200,66,0.1)':'var(--bg3)'};border:1px solid ${c.esMio?'var(--gold)':'var(--border)'};border-radius:10px">
+        <span style="font-size:0.95rem;width:24px">${medal}</span>
+        <span style="flex:1;font-size:0.84rem;font-weight:${c.esMio?'700':'500'}">${c.nombre}${c.esMio?' <span style="font-size:0.68rem;color:var(--gold)">(vos)</span>':''}</span>
+        <span style="font-family:var(--fm);font-size:0.84rem;color:var(--gold);font-weight:700">${fmtMoney(c.totalEarned)}</span>
+      </div>`;
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">No se pudo cargar el ranking.</div>`;
+  }
+}
+
+function buyClickerTier(pos) {
+  if (!CK_POSICIONES.includes(pos)) return;
+  const tierActual = ckState.positions[pos] || 0;
+  if (tierActual >= 6) return; // ya está en el máximo
+  const siguienteTier = tierActual + 1;
+  const data = ckTierData(pos, siguienteTier);
+  if (ckState.money < data.costo) return;
+  ckState.money -= data.costo;
+  ckState.positions[pos] = siguienteTier; // reemplaza al jugador anterior, sin reembolso
+  renderClicker();
+  saveClickerState();
+}
+
+function buyClickerBuilding(id) {
+  const b = CK_BUILDINGS_POOL.find(x => x.id === id);
+  if (!b) return;
+  const costo = ckBuildingCost(b);
+  if (ckState.money < costo) return;
+  ckState.money -= costo;
+  ckState.buildings[id] = (ckState.buildings[id] || 0) + 1;
+  renderClicker();
+  saveClickerState();
+}
+
+function resetClickerConfirm() {
+  if (confirm('¿Seguro que querés reiniciar todo el progreso del club? Esta acción no se puede deshacer.')) {
+    ckState = ckDefaultState();
+    renderClicker();
+    saveClickerState();
+  }
+}
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
