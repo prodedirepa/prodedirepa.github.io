@@ -681,7 +681,7 @@ async function renderPartidosUserFase(fasesHab) {
     html += `</div>`;
   });
 
-  if (hayPartidosSinResultado) {
+  if (hayPartidosAbiertos) {
     html += `<button class="btn btn-green btn-full" id="btn-guardar-fase" onclick="guardarPredFase()">💾 Guardar pronósticos</button>
     <div id="fase-save-msg"></div>`;
   }
