@@ -583,8 +583,15 @@ async function renderPartidosUserFase(fasesHab) {
   if (!curFaseUser || !fasesHab?.[curFaseUser]) {
     cont.innerHTML = `<div class="empty"><span>🔒</span>Esta fase aún no está habilitada</div>`; return;
   }
-  const { data: partidos } = await db.from('partidos').select('*').eq('fase', curFaseUser).order('orden');
-  if (!partidos?.length) { cont.innerHTML = `<div class="empty"><span>⏳</span>El admin aún no cargó los partidos</div>`; return; }
+  const { data: partidosRaw } = await db.from('partidos').select('*').eq('fase', curFaseUser).order('orden');
+  if (!partidosRaw?.length) { cont.innerHTML = `<div class="empty"><span>⏳</span>El admin aún no cargó los partidos</div>`; return; }
+  // Orden cronológico por hora de inicio; los partidos sin hora cargada quedan al final
+  const partidos = [...partidosRaw].sort((a,b) => {
+    if (!a.hora_inicio && !b.hora_inicio) return 0;
+    if (!a.hora_inicio) return 1;
+    if (!b.hora_inicio) return -1;
+    return new Date(a.hora_inicio) - new Date(b.hora_inicio);
+  });
   const { data: pronos } = await db.from('pronosticos').select('*').eq('codigo_usuario', me.codigo).in('partido_id', partidos.map(p=>p.id));
   const { data: resMap } = await db.from('resultados').select('*').in('partido_id', partidos.map(p=>p.id));
   const pronosMap = {}; pronos?.forEach(p => pronosMap[p.partido_id] = p);
@@ -1992,7 +1999,14 @@ async function renderUserPronos() {
   });
   pills += `</div>`;
 
-  const partidosFaseCerrados = partidosCerrados.filter(p => p.fase === curFaseUserPronos);
+  const partidosFaseCerrados = partidosCerrados
+    .filter(p => p.fase === curFaseUserPronos)
+    .sort((a,b) => {
+      if (!a.hora_inicio && !b.hora_inicio) return 0;
+      if (!a.hora_inicio) return 1;
+      if (!b.hora_inicio) return -1;
+      return new Date(a.hora_inicio) - new Date(b.hora_inicio);
+    });
   if (!curPartidoUserPronos || !partidosFaseCerrados.find(p => p.id === curPartidoUserPronos)) {
     curPartidoUserPronos = partidosFaseCerrados[0]?.id || null;
   }
