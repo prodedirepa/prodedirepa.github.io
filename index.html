@@ -139,20 +139,7 @@ select option{background:#1a1a24;}
   </div>
   <div class="container" style="max-width:460px;padding-top:0">
     <div class="card">
-      <div class="wtabs">
-        <button class="wtab active" id="wtab-new" onclick="showWTab('new')">Registrarme</button>
-        <button class="wtab" id="wtab-login" onclick="showWTab('login')">Ya tengo código</button>
-      </div>
-      <div id="wt-new">
-        <label>Tu nombre completo</label>
-        <input type="text" id="reg-nombre" placeholder="Ej: Juan García" maxlength="30" onkeydown="if(event.key==='Enter')registrar()">
-        <label>Elegí tu código PIN de 4 dígitos</label>
-        <input type="text" id="reg-pin" placeholder="····" maxlength="4" inputmode="numeric"
-          style="font-family:var(--fm);font-size:1.4rem;text-align:center;letter-spacing:10px"
-          onkeydown="if(event.key==='Enter')registrar()">
-        <button class="btn btn-primary btn-full" id="btn-registrar" onclick="registrar()">Registrarme →</button>
-      </div>
-      <div id="wt-login" style="display:none">
+      <div id="wt-login">
         <label>Tu nombre</label>
         <input type="text" id="login-nombre" placeholder="Ej: Juan García" onkeydown="if(event.key==='Enter')login()">
         <label>Código de 4 dígitos</label>
@@ -196,12 +183,14 @@ select option{background:#1a1a24;}
     <button id="utab-bienvenida" onclick="userTab('bienvenida')">🏠 Inicio</button>
     <button id="utab-pred" onclick="userTab('pred')">🎯 Predicciones</button>
     <button id="utab-partidos" onclick="userTab('partidos')">⚽ Partidos</button>
+    <button id="utab-pronos" onclick="userTab('pronos')">👁 Pronósticos</button>
     <button id="utab-tabla" onclick="userTab('tabla')">🏅 Tabla</button>
   </div>
   <div class="container">
     <div id="ucontent-bienvenida"></div>
     <div id="ucontent-pred" style="display:none"></div>
     <div id="ucontent-partidos" style="display:none"></div>
+    <div id="ucontent-pronos" style="display:none"></div>
     <div id="ucontent-tabla" style="display:none"></div>
   </div>
 </div>
@@ -217,6 +206,7 @@ select option{background:#1a1a24;}
     <button id="atab-partidos" onclick="adminTab('partidos')">⚽ Partidos</button>
     <button id="atab-resultados" onclick="adminTab('resultados')">✅ Resultados</button>
     <button id="atab-pronos" onclick="adminTab('pronos')">👁 Pronósticos</button>
+    <button id="atab-tablaadmin" onclick="adminTab('tablaadmin')">🏅 Tabla</button>
     <button id="atab-verificar" onclick="adminTab('verificar')">✏️ Verificar</button>
     <button id="atab-config" onclick="adminTab('config')">⚙️ Config</button>
   </div>
@@ -225,6 +215,7 @@ select option{background:#1a1a24;}
     <div id="acontent-partidos" style="display:none"></div>
     <div id="acontent-resultados" style="display:none"></div>
     <div id="acontent-pronos" style="display:none"></div>
+    <div id="acontent-tablaadmin" style="display:none"></div>
     <div id="acontent-verificar" style="display:none"></div>
     <div id="acontent-config" style="display:none"></div>
   </div>
@@ -304,12 +295,6 @@ function showMsg(id, msg, type) {
   const el = document.getElementById(id); if (!el) return;
   el.innerHTML = `<div class="alert alert-${type==='err'?'err':type==='ok'?'ok':'info'}">${msg}</div>`;
   if (type === 'ok') setTimeout(() => { if(el) el.innerHTML=''; }, 3000);
-}
-function showWTab(t) {
-  document.getElementById('wt-new').style.display = t==='new'?'':'none';
-  document.getElementById('wt-login').style.display = t==='login'?'':'none';
-  document.getElementById('wtab-new').className = 'wtab'+(t==='new'?' active':'');
-  document.getElementById('wtab-login').className = 'wtab'+(t==='login'?' active':'');
 }
 function loading(id) {
   const el = document.getElementById(id); if (!el) return;
@@ -406,7 +391,7 @@ async function enterUser() {
 }
 
 function userTab(t) {
-  ['bienvenida','pred','partidos','tabla'].forEach(x => {
+  ['bienvenida','pred','partidos','pronos','tabla'].forEach(x => {
     const el = document.getElementById(`ucontent-${x}`);
     if (el) el.style.display = x===t?'':'none';
     const btn = document.getElementById(`utab-${x}`);
@@ -416,6 +401,7 @@ function userTab(t) {
   if (t==='bienvenida') renderBienvenida();
   if (t==='pred') renderPred();
   if (t==='partidos') renderPartidosUser();
+  if (t==='pronos') renderUserPronos();
   if (t==='tabla') renderTabla();
 }
 
@@ -429,6 +415,34 @@ async function renderBienvenida() {
       <div style="font-family:var(--fd);font-size:1.6rem;letter-spacing:3px;color:var(--gold);margin-bottom:6px">BIENVENIDO, ${me.nombre.split(' ')[0].toUpperCase()}!</div>
       <p style="color:var(--muted);font-size:0.85rem">Prode Mundial 2026 · DIREPA</p>
     </div>
+
+    <div class="card" style="background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(255,107,53,0.05));border-color:rgba(245,200,66,0.3)">
+      <div class="card-title" style="text-align:center;justify-content:center">💰 PREMIOS</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:rgba(245,200,66,0.12);border:1px solid rgba(245,200,66,0.4);border-radius:12px">
+          <span style="font-size:1.8rem">🥇</span>
+          <div style="flex:1">
+            <div style="font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">1er Puesto</div>
+            <div style="font-family:var(--fm);font-size:1.3rem;font-weight:700;color:var(--gold)">$434.000</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:12px">
+          <span style="font-size:1.6rem">🥈</span>
+          <div style="flex:1">
+            <div style="font-size:0.76rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">2do Puesto</div>
+            <div style="font-family:var(--fm);font-size:1.15rem;font-weight:700;color:#d8d8e0">$124.000</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:11px 16px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:12px">
+          <span style="font-size:1.4rem">🥉</span>
+          <div style="flex:1">
+            <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">3er Puesto</div>
+            <div style="font-family:var(--fm);font-size:1.05rem;font-weight:700;color:#c08a4a">$62.000</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-title">📋 ¿CÓMO SE PUNTÚA?</div>
       <div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px">El prode tiene dos tipos de predicciones:</div>
@@ -454,7 +468,8 @@ async function renderBienvenida() {
           ${filapts('Resultado correcto (1-X-2)', 1)}
           ${filapts('⭐ Resultado exacto (partido bonus)', 3)}
         </div>
-        <p style="font-size:0.76rem;color:var(--muted);margin-top:8px">Hay que cargar los pronósticos antes de que empiece el primer partido de cada fecha. En cada fecha hay uno o más partidos <b style="color:var(--gold)">⭐ Bonus</b> donde hay que adivinar el resultado exacto.</p>
+        <p style="font-size:0.76rem;color:var(--muted);margin-top:8px">Cada partido cierra automáticamente <b style="color:var(--text)">1 minuto antes</b> de su hora de inicio. En cada fecha hay uno o más partidos <b style="color:var(--gold)">⭐ Bonus</b> donde hay que adivinar el resultado exacto.</p>
+        <p style="font-size:0.76rem;color:var(--muted);margin-top:6px">📌 A partir de <b style="color:var(--gold)">Octavos de Final</b> en adelante, <b style="color:var(--text)">todos los partidos son Bonus</b>.</p>
       </div>
     </div>
     <button class="btn btn-primary btn-full" onclick="userTab('pred')" style="margin-bottom:10px">🎯 Ir a mis predicciones →</button>
@@ -582,28 +597,51 @@ async function renderPartidosUserFase(fasesHab) {
     }
   });
 
-  const hayPartidosSinResultado = partidos.some(p => !resOfMap[p.id]);
+  const ahora = new Date();
+  // Un partido está cerrado si: tiene resultado oficial, O su hora_inicio ya pasó (con 1 min de margen)
+  const estaCerrado = (p) => {
+    if (resOfMap[p.id]) return true;
+    if (p.hora_inicio) {
+      const cierre = new Date(p.hora_inicio);
+      cierre.setMinutes(cierre.getMinutes() - 1);
+      return ahora >= cierre;
+    }
+    return false; // sin hora cargada = nunca se cierra automáticamente
+  };
+
+  const hayPartidosAbiertos = partidos.some(p => !estaCerrado(p));
 
   let html = '';
 
   // Disclaimer solo si hay partidos que se pueden editar
-  if (hayPartidosSinResultado) {
+  if (hayPartidosAbiertos) {
     html += `<div style="background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.8rem;display:flex;gap:8px;align-items:center">
       <span style="font-size:1.1rem">💾</span>
-      <span style="color:#d4b84a">Recordá darle a <b>Guardar pronósticos</b> al final para que queden registrados.</span>
+      <span style="color:#d4b84a">Recordá darle a <b>Guardar pronósticos</b>. Cada partido se cierra automáticamente 1 minuto antes de su hora de inicio.</span>
     </div>`;
   }
 
   partidos.forEach(p => {
     const localPred = localPreds[p.id] || {};
     const resOf = resOfMap[p.id];
-    const locked = !!resOf;
+    const cerrado = estaCerrado(p);
+    const locked = cerrado;
+
+    let horaInfo = '';
+    if (p.hora_inicio && !resOf) {
+      const d = new Date(p.hora_inicio);
+      const horaTxt = d.toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      horaInfo = cerrado
+        ? `<span style="font-size:0.7rem;color:var(--accent)">🔒 Cerrado (inicia ${horaTxt})</span>`
+        : `<span style="font-size:0.7rem;color:var(--muted)">⏰ Cierra 1 min antes de ${horaTxt}</span>`;
+    }
 
     html += `<div class="partido-card${p.es_bonus?' bonus':''}" id="pcard-${p.id}">
       <div class="partido-head">
         <div class="partido-teams">${p.local} vs ${p.visitante}</div>
         ${p.es_bonus?'<span class="bonus-tag">⭐ Bonus</span>':''}
-      </div>`;
+      </div>
+      ${horaInfo ? `<div style="margin-bottom:8px">${horaInfo}</div>` : ''}`;
 
     if (!p.es_bonus) {
       const s1=localPred.resultado==='1'?'sel-1':'';
@@ -695,11 +733,30 @@ async function guardarPredFase() {
   const btn = document.getElementById('btn-guardar-fase');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
 
+  // Doble verificación: traer estado actual de los partidos para no guardar en partidos ya cerrados
+  const partidoIds = Object.keys(localPreds).map(id => parseInt(id));
+  const { data: partidosActuales } = await db.from('partidos').select('id, hora_inicio').in('id', partidoIds);
+  const { data: resActuales } = await db.from('resultados').select('partido_id').in('partido_id', partidoIds);
+  const resSet = new Set(resActuales?.map(r => r.partido_id));
+  const ahora = new Date();
+  const cerradoMap = {};
+  partidosActuales?.forEach(p => {
+    let cerrado = resSet.has(p.id);
+    if (!cerrado && p.hora_inicio) {
+      const cierre = new Date(p.hora_inicio);
+      cierre.setMinutes(cierre.getMinutes() - 1);
+      cerrado = ahora >= cierre;
+    }
+    cerradoMap[p.id] = cerrado;
+  });
+
   const upserts = [];
   const deletes = [];
+  let omitidos = 0;
 
   Object.entries(localPreds).forEach(([partidoId, pred]) => {
     const id = parseInt(partidoId);
+    if (cerradoMap[id]) { omitidos++; return; } // ya cerrado, no se guarda
     const tieneProno = pred.resultado || pred.goles_local !== null;
     if (tieneProno) {
       upserts.push({
@@ -725,8 +782,15 @@ async function guardarPredFase() {
   hasUnsavedChanges = false;
 
   const el = document.getElementById('fase-save-msg');
-  if (el) { el.innerHTML = '<div class="alert alert-ok">✅ ¡Pronósticos guardados!</div>'; setTimeout(()=>el.innerHTML='', 3000); }
+  if (el) {
+    const msg = omitidos > 0
+      ? `⚠️ Guardado. ${omitidos} partido(s) ya habían cerrado y no se modificaron.`
+      : '✅ ¡Pronósticos guardados!';
+    el.innerHTML = `<div class="alert ${omitidos>0?'alert-info':'alert-ok'}">${msg}</div>`;
+    setTimeout(()=>el.innerHTML='', 4000);
+  }
   if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar pronósticos'; }
+  await renderPartidosUserFase(JSON.parse((await getConfig()).fases_habilitadas || '{}'));
 }
 
 // — TABLA —
@@ -1017,7 +1081,7 @@ function closeModal() { document.getElementById('modal-detalle').classList.remov
 // ADMIN
 // ═══════════════════════════════════════════════
 function adminTab(t) {
-  ['usuarios','partidos','resultados','pronos','verificar','config'].forEach(x => {
+  ['usuarios','partidos','resultados','pronos','tablaadmin','verificar','config'].forEach(x => {
     document.getElementById(`acontent-${x}`).style.display = x===t?'':'none';
     document.getElementById(`atab-${x}`).className = x===t?'active':'';
   });
@@ -1025,8 +1089,31 @@ function adminTab(t) {
   if (t==='partidos') renderAdminPartidos();
   if (t==='resultados') renderAdminRes();
   if (t==='pronos') renderAdminPronos();
+  if (t==='tablaadmin') renderAdminTabla();
   if (t==='verificar') renderAdminVerificar();
   if (t==='config') renderAdminConfig();
+}
+
+async function renderAdminTabla() {
+  const cont = document.getElementById('acontent-tablaadmin');
+  cont.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
+  const { data: users } = await db.from('usuarios').select('*');
+  if (!users?.length) { cont.innerHTML = '<div class="card"><div class="card-title">🏅 TABLA DE POSICIONES</div><div class="empty"><span>👥</span>Sin usuarios</div></div>'; return; }
+  const puntos = await calcularPuntosTabla(users);
+  const sorted = [...users].sort((a,b)=>(puntos[b.codigo]||0)-(puntos[a.codigo]||0));
+  let html = `<div class="card"><div class="card-title">🏅 TABLA DE POSICIONES</div>`;
+  sorted.forEach((u,i) => {
+    const p = puntos[u.codigo]||0;
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
+    html += `<div class="tabla-row">
+      <span style="font-size:1.1rem;width:26px">${medal}</span>
+      <span style="flex:1;font-weight:600">${u.nombre}</span>
+      <button class="detail-btn" onclick="openDetalle('${u.codigo}')">📊 Detalle</button>
+      <span class="tabla-pts">${p}</span>
+    </div>`;
+  });
+  html += `</div>`;
+  cont.innerHTML = html;
 }
 
 // — ADMIN USUARIOS —
@@ -1140,7 +1227,7 @@ async function renderAdminPartidos() {
   FASES.forEach(f => pills += `<button class="fase-pill${f.id===curFaseAdmin?' active':''}" onclick="setFaseAdmin('${f.id}')">${f.short}</button>`);
   pills += `</div>`;
   cont.innerHTML = `<div class="card"><div class="card-title">⚽ PARTIDOS POR FASE</div>
-    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px">Cargá los partidos. Podés marcar como ⭐ Bonus los que quieras.</p>
+    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px">Cargá los partidos. Podés marcar como ⭐ Bonus los que quieras. <b style="color:var(--accent)">Importante:</b> cada partido necesita su hora de inicio para que el cierre automático funcione (se cierra 1 minuto antes).</p>
     ${pills}<div id="partidos-admin-body"><div class="loading"><div class="spinner"></div></div></div>
     <button class="btn btn-primary btn-full" onclick="agregarPartido()">+ Agregar Partido</button>
   </div>`;
@@ -1155,6 +1242,7 @@ async function renderPartidosAdminFase() {
   if (!partidos?.length) { cont.innerHTML=`<div class="empty" style="padding:16px"><span>📝</span>Sin partidos. Agregá uno.</div>`; return; }
   let html = '';
   partidos.forEach((p,i) => {
+    const horaLocal = p.hora_inicio ? toLocalDatetimeInput(p.hora_inicio) : '';
     html += `<div class="admin-partido${p.es_bonus?' bonus':''}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <b style="color:${p.es_bonus?'var(--gold)':'var(--text)'}">${p.es_bonus?'⭐ Bonus · ':''}Partido ${i+1}</b>
@@ -1165,15 +1253,40 @@ async function renderPartidosAdminFase() {
         <div><label>Visitante</label><input type="text" value="${p.visitante||''}" placeholder="Equipo visitante" onchange="updPartido(${p.id},'visitante',this.value)"></div>
       </div>
       <label class="toggle-row"><input type="checkbox"${p.es_bonus?' checked':''} onchange="updPartido(${p.id},'es_bonus',this.checked)"> ⭐ Marcar como Bonus</label>
+      <label style="margin-top:10px">⏰ Hora de inicio del partido <span style="color:var(--accent)">*</span></label>
+      <input type="datetime-local" value="${horaLocal}" onchange="updHoraPartido(${p.id},this.value)">
+      ${!p.hora_inicio ? '<div style="font-size:0.72rem;color:var(--accent);margin-top:4px">⚠️ Sin hora cargada — las predicciones de este partido no se cerrarán automáticamente</div>' : `<div style="font-size:0.72rem;color:var(--green);margin-top:4px">🔒 Se cierra a las ${formatHoraCierre(p.hora_inicio)}</div>`}
     </div>`;
   });
   cont.innerHTML = html;
 }
 
+// Convierte un timestamp ISO a formato para <input type="datetime-local"> en hora local
+function toLocalDatetimeInput(isoStr) {
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatHoraCierre(isoStr) {
+  const d = new Date(isoStr);
+  d.setMinutes(d.getMinutes() - 1);
+  return d.toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+async function updHoraPartido(id, val) {
+  if (!val) { alert('Tenés que ingresar una hora de inicio para guardar el partido.'); return; }
+  // val viene en formato "YYYY-MM-DDTHH:mm" en hora local del navegador
+  const iso = new Date(val).toISOString();
+  await db.from('partidos').update({ hora_inicio: iso }).eq('id', id);
+  await renderPartidosAdminFase();
+}
+
 async function agregarPartido() {
   const { data: partidos } = await db.from('partidos').select('orden').eq('fase', curFaseAdmin).order('orden', {ascending:false}).limit(1);
   const orden = (partidos?.[0]?.orden||0) + 1;
-  await db.from('partidos').insert({ fase: curFaseAdmin, local:'', visitante:'', es_bonus:false, orden });
+  // Se crea sin hora_inicio; el admin debe completarla para que el cierre automático funcione
+  await db.from('partidos').insert({ fase: curFaseAdmin, local:'', visitante:'', es_bonus:false, orden, hora_inicio:null });
   await renderPartidosAdminFase();
 }
 
@@ -1346,24 +1459,20 @@ async function renderAdminConfig() {
     </div>`;
   });
   html += `<div class="divider"></div>
-    <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">⏰ Cierre Automático</h4>
-    <p style="font-size:0.76rem;color:var(--muted);margin-bottom:12px">Programá a qué hora se cierran automáticamente las predicciones o una fase.</p>
+    <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">⏰ Cierre Automático — Predicciones Generales</h4>
+    <p style="font-size:0.76rem;color:var(--muted);margin-bottom:12px">Programá a qué hora se cierran automáticamente las predicciones generales.</p>
     <label>Cierre — Predicciones Generales</label>
     <input type="datetime-local" id="auto-close-pred" value="${cfg.auto_close_pred||''}">
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-primary btn-sm" style="flex:1" onclick="guardarAutoClose('pred')">💾 Guardar</button>
       <button class="btn btn-danger btn-sm" style="flex:1" onclick="borrarAutoClose('pred')">🗑 Borrar</button>
     </div>
-    <label style="margin-top:14px">Fase a programar</label>
-    <select id="auto-close-fase-sel">${FASES.map(f=>`<option value="${f.id}">${f.label}</option>`).join('')}</select>
-    <label>Cierre — Fase seleccionada</label>
-    <input type="datetime-local" id="auto-close-fase-dt" value="">
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn btn-primary btn-sm" style="flex:1" onclick="guardarAutoCloseFase()">💾 Guardar</button>
-      <button class="btn btn-danger btn-sm" style="flex:1" onclick="borrarAutoCloseFase()">🗑 Borrar</button>
-    </div>
     <div id="autoclose-msg"></div>
     <div id="autoclose-lista" style="margin-top:10px"></div>
+    <div class="alert alert-info" style="margin-top:10px;font-size:0.78rem">ℹ️ Los partidos ya NO se cierran por fecha completa — cada partido se cierra automáticamente 1 minuto antes de su hora de inicio (configurada en la pestaña ⚽ Partidos).</div>
+    <div class="divider"></div>
+    <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">⭐ Reglas del Prode</h4>
+    <div class="alert alert-info" style="font-size:0.8rem">A partir de <b>Octavos de Final</b> en adelante, <b>todos los partidos</b> son considerados "Bonus" (hay que adivinar el resultado exacto para sumar puntos).</div>
     <div class="divider"></div>
     <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🏆 Puntajes Predicciones Iniciales</h4>
     <div class="grid2">
@@ -1663,14 +1772,12 @@ async function renderPronosPartido() {
   if (!curPartidoPronos) { cont.innerHTML = `<div class="empty">Sin partido seleccionado</div>`; return; }
 
   const { data: partido } = await db.from('partidos').select('*').eq('id', curPartidoPronos).single();
-  const cfg = await getConfig();
-  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
-
-  // Si la fase está abierta y no hay resultado oficial, ocultar pronósticos
   const { data: resOf } = await db.from('resultados').select('*').eq('partido_id', curPartidoPronos).single();
-  const faseAbierta = fasesHab[partido?.fase];
-  if (faseAbierta && !resOf) {
-    cont.innerHTML = `<div class="alert alert-info" style="margin-top:8px">🔒 Los pronósticos de este partido se mostrarán cuando la fase esté cerrada o se cargue el resultado oficial.</div>`;
+
+  // El partido está cerrado si tiene resultado oficial, o si ya pasó su hora_inicio (1 min antes)
+  const partidoAbierto = estaPartidoAbierto(partido, !!resOf);
+  if (partidoAbierto) {
+    cont.innerHTML = `<div class="alert alert-info" style="margin-top:8px">🔒 Los pronósticos de este partido se mostrarán cuando cierre (1 min antes de su hora de inicio) o se cargue el resultado oficial.</div>`;
     return;
   }
 
@@ -1848,6 +1955,161 @@ async function checkAutoClose() {
 setInterval(checkAutoClose, 30000);
 checkAutoClose(); // correr una vez al iniciar
 
+// — USUARIO: PESTAÑA PRONÓSTICOS (solo lectura, solo partidos cerrados) —
+let curFaseUserPronos = null;
+let curPartidoUserPronos = null;
+
+async function renderUserPronos() {
+  const cont = document.getElementById('ucontent-pronos');
+  cont.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
+
+  const { data: todosPartidos } = await db.from('partidos').select('*').order('fase').order('orden');
+  if (!todosPartidos?.length) {
+    cont.innerHTML = `<div class="card"><div class="card-title">👁 PRONÓSTICOS</div><div class="empty"><span>⚽</span>No hay partidos cargados aún</div></div>`;
+    return;
+  }
+
+  const { data: todosResultados } = await db.from('resultados').select('partido_id');
+  const resSet = new Set(todosResultados?.map(r => r.partido_id));
+
+  // Solo mostrar partidos que ya cerraron (con resultado o por hora)
+  const partidosCerrados = todosPartidos.filter(p => !estaPartidoAbierto(p, resSet.has(p.id)));
+
+  const fasesConPartidosCerrados = FASES.filter(f => partidosCerrados.some(p => p.fase === f.id));
+  if (!fasesConPartidosCerrados.length) {
+    cont.innerHTML = `<div class="card"><div class="card-title">👁 PRONÓSTICOS</div>
+      <div class="empty"><span>🔒</span>Todavía no hay partidos cerrados. Acá vas a poder ver qué pronosticó cada uno una vez que cierre el plazo de cada partido.</div></div>`;
+    return;
+  }
+
+  if (!fasesConPartidosCerrados.find(f => f.id === curFaseUserPronos)) {
+    curFaseUserPronos = fasesConPartidosCerrados[fasesConPartidosCerrados.length - 1].id;
+  }
+
+  let pills = `<div class="fase-pills">`;
+  fasesConPartidosCerrados.forEach(f => {
+    pills += `<button class="fase-pill${f.id===curFaseUserPronos?' active':''}" onclick="setFaseUserPronos('${f.id}')">${f.short}</button>`;
+  });
+  pills += `</div>`;
+
+  const partidosFaseCerrados = partidosCerrados.filter(p => p.fase === curFaseUserPronos);
+  if (!curPartidoUserPronos || !partidosFaseCerrados.find(p => p.id === curPartidoUserPronos)) {
+    curPartidoUserPronos = partidosFaseCerrados[0]?.id || null;
+  }
+
+  let selector = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">`;
+  partidosFaseCerrados.forEach(p => {
+    const label = p.local && p.visitante ? `${p.local} vs ${p.visitante}` : `Partido ${p.id}`;
+    selector += `<button class="fase-pill${p.id===curPartidoUserPronos?' active':''}" onclick="setPartidoUserPronos(${p.id})" style="font-size:0.72rem">${label}${p.es_bonus?' ⭐':''}</button>`;
+  });
+  selector += `</div>`;
+
+  cont.innerHTML = `<div class="card"><div class="card-title">👁 PRONÓSTICOS</div>
+    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:14px">Solo se muestran partidos que ya cerraron (con resultado oficial o cuyo horario ya pasó).</p>
+    ${pills}${selector}<div id="user-pronos-body"><div class="loading"><div class="spinner"></div></div></div></div>`;
+
+  await renderUserPronosPartido(partidosFaseCerrados.find(p => p.id === curPartidoUserPronos));
+}
+
+async function setFaseUserPronos(id) { curFaseUserPronos = id; curPartidoUserPronos = null; await renderUserPronos(); }
+async function setPartidoUserPronos(id) { curPartidoUserPronos = id; await renderUserPronos(); }
+
+async function renderUserPronosPartido(partido) {
+  const cont = document.getElementById('user-pronos-body'); if (!cont) return;
+  if (!partido) { cont.innerHTML = `<div class="empty">Sin partido seleccionado</div>`; return; }
+
+  const { data: resOf } = await db.from('resultados').select('*').eq('partido_id', partido.id).single();
+  const { data: usuarios } = await db.from('usuarios').select('*').order('nombre');
+  const { data: pronos } = await db.from('pronosticos').select('*').eq('partido_id', partido.id);
+  const pronoMap = {}; pronos?.forEach(p => pronoMap[p.codigo_usuario] = p);
+
+  let c1=0, cx=0, c2=0, cNone=0;
+  usuarios?.forEach(u => {
+    const pr = pronoMap[u.codigo];
+    if (!pr) { cNone++; return; }
+    if (partido.es_bonus) {
+      if ((pr.goles_local||0) > (pr.goles_visitante||0)) c1++;
+      else if ((pr.goles_local||0) < (pr.goles_visitante||0)) c2++;
+      else cx++;
+    } else {
+      if (pr.resultado==='1') c1++;
+      else if (pr.resultado==='x') cx++;
+      else if (pr.resultado==='2') c2++;
+      else cNone++;
+    }
+  });
+  const total = usuarios?.length || 0;
+
+  let html = '';
+  if (resOf) {
+    const resTxt = resOf.goles_local !== null
+      ? `${resOf.goles_local}–${resOf.goles_visitante}`
+      : resOf.resultado==='1'?partido.local:resOf.resultado==='2'?partido.visitante:'Empate';
+    html += `<div class="alert alert-ok" style="margin-bottom:14px">✅ Resultado oficial: <b>${resTxt}</b></div>`;
+  } else {
+    html += `<div class="alert alert-info" style="margin-bottom:14px">⏰ Este partido ya cerró pronósticos pero aún no se cargó el resultado oficial.</div>`;
+  }
+
+  html += `<div style="margin-bottom:16px">
+    <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Distribución de pronósticos</div>
+    ${barra(partido.local, c1, total, 'var(--green)')}
+    ${barra('Empate', cx, total, 'var(--blue)')}
+    ${barra(partido.visitante, c2, total, 'var(--accent)')}
+    ${cNone?barra('Sin pronóstico', cNone, total, 'var(--muted)'):''}
+  </div>`;
+
+  html += `<div style="overflow-x:auto"><table class="preds-table">
+    <thead><tr><th>Usuario</th><th>Pronóstico</th>${partido.es_bonus?'<th>Goles</th>':''}${resOf?'<th>Resultado</th>':''}</tr></thead>
+    <tbody>`;
+
+  usuarios?.forEach(u => {
+    const pr = pronoMap[u.codigo];
+    let pronoTxt = '<span style="color:var(--muted)">–</span>';
+    let color = 'var(--muted)';
+    let golesTxt = '';
+    let acierto = '';
+
+    if (pr) {
+      if (partido.es_bonus) {
+        golesTxt = `${pr.goles_local??'?'}–${pr.goles_visitante??'?'}`;
+        const tend = (pr.goles_local||0)>(pr.goles_visitante||0)?partido.local:(pr.goles_local||0)<(pr.goles_visitante||0)?partido.visitante:'Empate';
+        pronoTxt = tend; color = 'var(--text)';
+        if (resOf) {
+          const exacto = pr.goles_local==resOf.goles_local && pr.goles_visitante==resOf.goles_visitante;
+          const rs=resOf.goles_local>resOf.goles_visitante?'1':resOf.goles_local<resOf.goles_visitante?'2':'x';
+          const ps=(pr.goles_local||0)>(pr.goles_visitante||0)?'1':(pr.goles_local||0)<(pr.goles_visitante||0)?'2':'x';
+          acierto = exacto?'<span style="color:var(--gold)">🎯 +3</span>':rs===ps?'<span style="color:var(--green)">✅ +1</span>':'<span style="color:var(--muted)">❌</span>';
+        }
+      } else {
+        if (pr.resultado==='1') { pronoTxt=partido.local; color='var(--green)'; }
+        else if (pr.resultado==='x') { pronoTxt='Empate'; color='var(--blue)'; }
+        else if (pr.resultado==='2') { pronoTxt=partido.visitante; color='var(--accent)'; }
+        if (resOf) acierto = pr.resultado===resOf.resultado?'<span style="color:var(--green)">✅ +1</span>':'<span style="color:var(--muted)">❌</span>';
+      }
+    }
+
+    html += `<tr>
+      <td><b>${u.nombre}</b></td>
+      <td style="color:${color}">${pronoTxt}</td>
+      ${partido.es_bonus?`<td style="font-family:var(--fm)">${golesTxt||'–'}</td>`:''}
+      ${resOf?`<td>${acierto}</td>`:''}
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  cont.innerHTML = html;
+}
+
+// — HELPER COMPARTIDO: determina si un partido sigue abierto para pronosticar —
+// Un partido está ABIERTO si no tiene resultado oficial Y (no tiene hora cargada O su hora de cierre -1min- no llegó)
+function estaPartidoAbierto(partido, tieneResultado) {
+  if (tieneResultado) return false;
+  if (!partido?.hora_inicio) return true; // sin hora = nunca se cierra automáticamente, queda abierto
+  const cierre = new Date(partido.hora_inicio);
+  cierre.setMinutes(cierre.getMinutes() - 1);
+  return new Date() < cierre;
+}
+
 // — ADMIN VERIFICAR PREDICCIONES —
 // Campos que se verifican manualmente (los de texto libre)
 const CAMPOS_VERIFICAR = [
@@ -2013,7 +2275,7 @@ async function recalcularPuntosVerificados() {
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-showWTab('new');
+// Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
 </body>
 </html>
