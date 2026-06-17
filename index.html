@@ -324,7 +324,9 @@ select option{background:#1a1a24;}
   <div class="container" style="max-width:520px">
 
     <div class="card" style="text-align:center;padding:20px;background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(255,107,53,0.05));border-color:rgba(245,200,66,0.3)">
-      <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px" id="ck-club-name">Club Amateur FC</div>
+      <div id="ck-club-name" style="font-family:var(--fd);font-size:1.3rem;color:var(--gold);letter-spacing:1px;margin-bottom:2px">Mi Club</div>
+      <div id="ck-club-rank" style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Club Amateur FC</div>
+      <button class="btn btn-ghost btn-sm" onclick="ckRenameClub()" style="margin-bottom:6px">✏️ Renombrar club</button>
       <div id="ck-money" style="font-family:var(--fm);font-size:2.1rem;font-weight:700;color:var(--gold)">$0</div>
       <div style="font-size:0.78rem;color:var(--muted);margin-top:2px">por click: $<span id="ck-per-click">1</span> · por seg: $<span id="ck-per-sec">0</span></div>
     </div>
@@ -1255,12 +1257,14 @@ async function renderAdminUsers() {
     { data: preds },
     { data: todosProno },
     { data: todosPartidos },
+    { data: todosResultados },
   ] = await Promise.all([
     getConfig(),
     db.from('usuarios').select('*').order('created_at'),
     db.from('predicciones_iniciales').select('*'),
     db.from('pronosticos').select('codigo_usuario, partido_id'),
-    db.from('partidos').select('id, fase'),
+    db.from('partidos').select('*'),
+    db.from('resultados').select('partido_id'),
   ]);
 
   const predAbiertas = cfg.pred_abiertas === 'true';
@@ -1268,43 +1272,45 @@ async function renderAdminUsers() {
   const predSet = new Set(preds?.map(p => p.codigo));
   const puntos = users?.length ? await calcularPuntosTabla(users) : {};
 
-  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
-  const fasesAbiertas = FASES.filter(f => fasesHab[f.id]);
-  const partidosPorFase = {};
-  todosPartidos?.forEach(p => {
-    if (!partidosPorFase[p.fase]) partidosPorFase[p.fase] = [];
-    partidosPorFase[p.fase].push(p.id);
-  });
-  const pronosPorUsuarioFase = {};
-  todosProno?.forEach(pr => {
-    const partido = todosPartidos?.find(p => p.id === pr.partido_id);
-    if (!partido) return;
-    const key = `${pr.codigo_usuario}_${partido.fase}`;
-    if (!pronosPorUsuarioFase[key]) pronosPorUsuarioFase[key] = 0;
-    pronosPorUsuarioFase[key]++;
-  });
+  // Encontrar el próximo partido sin resultado oficial (el más próximo cronológicamente entre TODOS los partidos)
+  const resSet = new Set(todosResultados?.map(r => r.partido_id));
+  const sinResultado = (todosPartidos || []).filter(p => !resSet.has(p.id));
+  const conHora = sinResultado.filter(p => p.hora_inicio);
+  conHora.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
+  const proximoPartido = conHora[0] || sinResultado[0] || null;
+
+  // Quiénes ya cargaron pronóstico para ese partido específico
+  const pronosProximo = new Set(
+    (todosProno || []).filter(pr => proximoPartido && pr.partido_id === proximoPartido.id).map(pr => pr.codigo_usuario)
+  );
 
   let html = `<div class="card"><div class="card-title">👥 USUARIOS REGISTRADOS</div>`;
+
+  if (proximoPartido) {
+    html += `<div class="alert alert-info" style="font-size:0.78rem;margin-bottom:14px">
+      ℹ️ <b>¿Cargó su pronóstico para el próximo partido?</b><br>
+      Próximo partido sin resultado: <b>${proximoPartido.local} vs ${proximoPartido.visitante}</b>${proximoPartido.es_bonus?' ⭐':''}.
+      Debajo de cada usuario: <span style="color:var(--green)">✅</span> ya cargó su pronóstico para ese partido, <span style="color:var(--accent)">❌</span> todavía no.
+    </div>`;
+  }
+
   if (!users?.length) html += `<div class="empty"><span>👤</span>Sin usuarios aún</div>`;
   else {
     const sorted = [...users].sort((a,b)=>(puntos[b.codigo]||0)-(puntos[a.codigo]||0));
     sorted.forEach(u => {
       const tienePred = predSet.has(u.codigo);
 
-      // Badges de estado
       let badges = '';
       if (predAbiertas) badges += `<span title="Predicciones generales" style="font-size:0.7rem">${tienePred?'✅':'⏳'} Generales</span>`;
-      fasesAbiertas.forEach(f => {
-        const total = partidosPorFase[f.id]?.length || 0;
-        const cargados = pronosPorUsuarioFase[`${u.codigo}_${f.id}`] || 0;
-        const icon = total > 0 ? (cargados >= total ? '✅' : cargados > 0 ? '⚠️' : '⏳') : null;
-        if (icon) badges += `<span title="${f.label}" style="font-size:0.7rem">${icon} ${f.short}</span>`;
-      });
+      if (proximoPartido) {
+        const cargo = pronosProximo.has(u.codigo);
+        badges += `<span title="¿Cargó su pronóstico para el próximo partido?" style="font-size:0.7rem">${cargo?'✅':'❌'} Próximo partido</span>`;
+      }
 
       html += `<div class="admin-user-row">
         <div style="flex:1">
           <div class="aname">${u.nombre}</div>
-          <div style="color:var(--muted);font-size:0.8rem;display:flex;gap:8px;flex-wrap:wrap;margin-top:3px">${badges||'<span style="font-size:0.7rem">Sin fases abiertas</span>'}</div>
+          <div style="color:var(--muted);font-size:0.8rem;display:flex;gap:8px;flex-wrap:wrap;margin-top:3px">${badges||'<span style="font-size:0.7rem">Sin partidos pendientes</span>'}</div>
         </div>
         <div class="acode">${u.codigo}</div>
         <div class="admin-actions">
@@ -2636,7 +2642,7 @@ document.addEventListener('keydown', (e) => {
 // ═══════════════════════════════════════════════
 // EASTER EGG SECRETO #2 — CLUB MANAGER CLICKER
 // ═══════════════════════════════════════════════
-const CK_STORAGE_KEY_BASE = 'club_manager_save';
+const CK_STORAGE_KEY_BASE = 'club_manager_save_v2';
 
 // Genera/recupera un ID único por navegador/dispositivo para separar el progreso de cada jugador
 function getCkDeviceId() {
@@ -2819,15 +2825,40 @@ function ckDefaultState() {
     positions: { ARQ:0, DEF:0, MED:0, DEL:0, DT:0 },
     buildings: {},
     prestigeLevel: 0,
+    clubName: null, // se pide la primera vez que entra a jugar
   };
 }
 
 async function enterClicker() {
   goTo('screen-clicker');
   await loadClickerState();
+
+  // Primera vez: pedir nombre del club antes de arrancar
+  if (!ckState.clubName) {
+    let nombre = null;
+    while (!nombre) {
+      nombre = prompt('¡Bienvenido! Elegí el nombre de tu club:', '');
+      if (nombre === null) { exitClicker(); return; } // canceló, vuelve al menú
+      nombre = nombre.trim();
+      if (!nombre) nombre = null; // si puso vacío, vuelve a pedir
+    }
+    ckState.clubName = nombre.slice(0, 40); // límite razonable de longitud
+    saveClickerState();
+  }
+
   renderClicker();
   if (ckInterval) clearInterval(ckInterval);
   ckInterval = setInterval(clickerTick, 1000);
+}
+
+function ckRenameClub() {
+  const nuevo = prompt('Nuevo nombre para tu club:', ckState.clubName || '');
+  if (nuevo === null) return;
+  const limpio = nuevo.trim();
+  if (!limpio) return;
+  ckState.clubName = limpio.slice(0, 40);
+  renderClicker();
+  saveClickerState();
 }
 
 function exitClicker() {
@@ -2887,7 +2918,7 @@ function ckBuildingCost(b) {
   return Math.floor(b.costoBase * Math.pow(1.15, cant));
 }
 
-function ckClubName() {
+function ckClubRank() {
   let nombre = CK_CLUB_NAMES[0].nombre;
   CK_CLUB_NAMES.forEach(n => { if (ckState.totalEarned >= n.umbral) nombre = n.nombre; });
   const nivel = ckState.prestigeLevel || 0;
@@ -2947,10 +2978,12 @@ function renderClickerNumbers() {
   const elPerClick = document.getElementById('ck-per-click');
   const elPerSec = document.getElementById('ck-per-sec');
   const elName = document.getElementById('ck-club-name');
+  const elRank = document.getElementById('ck-club-rank');
   if (elMoney) elMoney.textContent = fmtMoney(ckState.money);
   if (elPerClick) elPerClick.textContent = fmtMoney(ckPerClick()).replace('$','');
   if (elPerSec) elPerSec.textContent = fmtMoney(ckPerSec()).replace('$','');
-  if (elName) elName.textContent = ckClubName();
+  if (elName) elName.textContent = ckState.clubName || 'Mi Club';
+  if (elRank) elRank.textContent = ckClubRank();
 }
 
 function renderCkPrestigeCard() {
@@ -3068,10 +3101,11 @@ async function renderCkRanking() {
       try { parsed = JSON.parse(row.valor); } catch {}
       const totalEarned = parsed.totalEarned || 0;
       const prestigeLevel = parsed.prestigeLevel || 0;
-      let nombre = CK_CLUB_NAMES[0].nombre;
-      CK_CLUB_NAMES.forEach(n => { if (totalEarned >= n.umbral) nombre = n.nombre; });
-      if (prestigeLevel > 0) nombre += ` (${ckCategoriaNombre(prestigeLevel)})`;
-      return { clave: row.clave, nombre, totalEarned, prestigeLevel, esMio: row.clave === miClave };
+      const nombre = parsed.clubName || 'Club sin nombre';
+      let rango = CK_CLUB_NAMES[0].nombre;
+      CK_CLUB_NAMES.forEach(n => { if (totalEarned >= n.umbral) rango = n.nombre; });
+      if (prestigeLevel > 0) rango = ckCategoriaNombre(prestigeLevel);
+      return { clave: row.clave, nombre, rango, totalEarned, prestigeLevel, esMio: row.clave === miClave };
     }).sort((a,b) => (b.prestigeLevel - a.prestigeLevel) || (b.totalEarned - a.totalEarned));
 
     let html = '';
@@ -3079,7 +3113,10 @@ async function renderCkRanking() {
       const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
       html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${c.esMio?'rgba(245,200,66,0.1)':'var(--bg3)'};border:1px solid ${c.esMio?'var(--gold)':'var(--border)'};border-radius:10px">
         <span style="font-size:0.95rem;width:24px">${medal}</span>
-        <span style="flex:1;font-size:0.84rem;font-weight:${c.esMio?'700':'500'}">${c.nombre}${c.esMio?' <span style="font-size:0.68rem;color:var(--gold)">(vos)</span>':''}</span>
+        <div style="flex:1">
+          <div style="font-size:0.84rem;font-weight:${c.esMio?'700':'500'}">${c.nombre}${c.esMio?' <span style="font-size:0.68rem;color:var(--gold)">(vos)</span>':''}</div>
+          <div style="font-size:0.68rem;color:var(--muted)">${c.rango}</div>
+        </div>
         <span style="font-family:var(--fm);font-size:0.84rem;color:var(--gold);font-weight:700">${fmtMoney(c.totalEarned)}</span>
       </div>`;
     });
