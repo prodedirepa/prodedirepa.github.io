@@ -479,6 +479,14 @@ async function registrar() {
 async function login() {
   const nombre = document.getElementById('login-nombre').value.trim();
   const codigo = document.getElementById('login-codigo').value.trim();
+
+  // Modo mantenimiento: si está activo, bloquea el ingreso de usuarios normales
+  const cfg = await getConfig();
+  if (cfg.mantenimiento_activo === 'true') {
+    showMsg('welcome-msg', '🔧 El prode está en mantenimiento temporalmente. Volvé a intentar en unos minutos.', 'info');
+    return;
+  }
+
   const { data, error } = await db.from('usuarios').select('*').eq('codigo', codigo).single();
   if (!data) { showMsg('welcome-msg','Código incorrecto','err'); return; }
   if (data.nombre.toLowerCase() !== nombre.toLowerCase()) { showMsg('welcome-msg','El nombre no coincide con el código','err'); return; }
@@ -1560,10 +1568,19 @@ async function renderAdminConfig() {
   cont.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   const cfg = await getConfig();
   const open = cfg.pred_abiertas === 'true';
+  const mantenimiento = cfg.mantenimiento_activo === 'true';
   let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
   const { data: gan } = await db.from('ganadores').select('*').single();
   const opt = sel => PAISES.map(p=>`<option value="${p}"${gan?.[sel]===p?' selected':''}>${p}</option>`).join('');
-  let html = `<div class="card"><div class="card-title">⚙️ CONFIGURACIÓN</div>
+  let html = `<div class="card" style="border-color:${mantenimiento?'var(--accent)':'var(--border)'}"><div class="card-title">🔧 MODO MANTENIMIENTO</div>
+    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:12px">Activalo para bloquear el ingreso de usuarios normales (por ejemplo, mientras hacés pruebas). El admin nunca se ve afectado.</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-danger" style="flex:1" onclick="setMantenimiento(true)">🔧 Activar bloqueo</button>
+      <button class="btn btn-green" style="flex:1" onclick="setMantenimiento(false)">🟢 Desactivar</button>
+    </div>
+    <div class="alert ${mantenimiento?'alert-err':'alert-ok'}" style="margin-top:8px">Estado actual: <b>${mantenimiento?'🔧 Mantenimiento ACTIVO — usuarios bloqueados':'🟢 Acceso normal habilitado'}</b></div>
+  </div>
+  <div class="card"><div class="card-title">⚙️ CONFIGURACIÓN</div>
     <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🔒 Predicciones Iniciales</h4>
     <div style="display:flex;gap:8px">
       <button class="btn btn-green" style="flex:1" onclick="setPredOpen(true)">🟢 Abrir</button>
@@ -1619,6 +1636,10 @@ async function renderAdminConfig() {
   cont.innerHTML = html;
 }
 
+async function setMantenimiento(val) {
+  await setConfig('mantenimiento_activo', val ? 'true' : 'false');
+  await renderAdminConfig();
+}
 async function setPredOpen(val) {
   await setConfig('pred_abiertas', val ? 'true' : 'false');
   await renderAdminConfig();
@@ -2792,6 +2813,7 @@ function clickerEarn() {
   ckState.money += gain;
   ckState.totalEarned += gain;
   renderClickerNumbers();
+  refreshClickerButtons();
   saveClickerState();
   // micro-animación del botón
   const ball = document.getElementById('ck-ball');
@@ -2807,8 +2829,23 @@ function clickerTick() {
     ckState.money += gain;
     ckState.totalEarned += gain;
     renderClickerNumbers();
+    refreshClickerButtons();
     saveClickerState();
   }
+}
+
+// Habilita/deshabilita los botones de compra según la plata actual, sin reconstruir todo el HTML
+function refreshClickerButtons() {
+  document.querySelectorAll('[data-ck-cost]').forEach(btn => {
+    const costo = parseFloat(btn.dataset.ckCost);
+    const canAfford = ckState.money >= costo;
+    btn.disabled = !canAfford;
+    btn.style.opacity = canAfford ? '1' : '0.5';
+    btn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+    btn.classList.toggle('btn-gold', canAfford && btn.dataset.ckGold === '1');
+    btn.classList.toggle('btn-primary', canAfford && btn.dataset.ckGold !== '1');
+    btn.classList.toggle('btn-ghost', !canAfford);
+  });
 }
 
 function renderClickerNumbers() {
@@ -2846,7 +2883,7 @@ function renderClicker() {
             <div style="font-weight:600;font-size:0.86rem">${CK_POS_LABEL[pos]} <span style="font-size:0.68rem;color:var(--muted)">· posición vacía</span></div>
             <div style="font-size:0.74rem;color:var(--muted)">${t1.nombre} · +${fmtMoney(t1.bonus).replace('$','')} por click</div>
           </div>
-          <button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(t1.costo)}</button>
+          <button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" data-ck-cost="${t1.costo}" data-ck-gold="1" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(t1.costo)}</button>
         </div>`;
       } else {
         const actual = ckTierData(pos, tierActual, true); // revelado=true: si es tier 6, ya fue comprado y se muestra el nombre real
@@ -2856,7 +2893,7 @@ function renderClicker() {
         } else {
           const sig = ckTierData(pos, tierActual + 1);
           const canAfford = ckState.money >= sig.costo;
-          extra = `<button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">⬆ ${fmtMoney(sig.costo)}</button>`;
+          extra = `<button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" data-ck-cost="${sig.costo}" data-ck-gold="1" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">⬆ ${fmtMoney(sig.costo)}</button>`;
         }
         html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(0,214,143,0.08);border:1px solid var(--green);border-radius:10px">
           <div style="flex:1">
@@ -2883,7 +2920,7 @@ function renderClicker() {
           <div style="font-weight:600;font-size:0.86rem">${b.nombre} ${cant > 0 ? `<span style="font-size:0.72rem;color:var(--gold)">x${cant}</span>` : ''}</div>
           <div style="font-size:0.74rem;color:var(--muted)">+${fmtMoney(b.prodBase).replace('$','')}/seg cada una</div>
         </div>
-        <button class="btn btn-sm ${canAfford ? 'btn-primary' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerBuilding('${b.id}')" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(costo)}</button>
+        <button class="btn btn-sm ${canAfford ? 'btn-primary' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerBuilding('${b.id}')" data-ck-cost="${costo}" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(costo)}</button>
       </div>`;
     });
     buildingsList.innerHTML = html;
