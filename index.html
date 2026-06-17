@@ -338,6 +338,8 @@ select option{background:#1a1a24;}
       <div id="ck-players-list" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
+    <div id="ck-prestige-card"></div>
+
     <div class="card">
       <div class="card-title">🏟️ INSTALACIONES</div>
       <div id="ck-buildings-list" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -2649,73 +2651,164 @@ function ckStorageKey() {
   return `${CK_STORAGE_KEY_BASE}_${getCkDeviceId()}`;
 }
 
-// 5 posiciones fijas, cada una con 6 tiers de jugador para upgradear.
-// 4 posiciones de jugador + 1 de DT, cada una con 6 tiers de jugador para upgradear.
+// 4 posiciones de jugador + 1 de DT, cada una con 10 tiers de jugador para upgradear.
 // Tier 0 = posición vacía (sin jugador). Comprar tier 1 desbloquea la posición.
 // Cada tier siguiente reemplaza al anterior, sin reembolso, costo fijo creciente.
-// El tier 6 de cada posición es secreto: aparece como "???" hasta comprarlo.
+// El tier 10 de cada posición es secreto: aparece como "???" hasta comprarlo.
 const CK_POSICIONES = ['ARQ','DEF','MED','DEL','DT'];
 const CK_POS_LABEL = { ARQ:'Arquero', DEF:'Defensor', MED:'Mediocampista', DEL:'Delantero', DT:'Director Técnico' };
 
+// Todos los tiers 1-9 con nombres definidos por Fonti; tier 10 siempre aparece como "???" hasta comprarlo.
 const CK_TIERS_NOMBRES = {
-  ARQ: ['Emanuel Tripodi', 'Cristian Luchetti', 'Agustin Orion', 'Marcelo Barovero', 'Franco Armaniqui', '???'],
-  DEF: ['Chiche Arano', 'Chiqui Perez', 'Cristian Tula', 'Carlos Izquierdoz', 'Timbita Lomonaco', '???'],
-  MED: ['Brian Sarmiento', 'Polaco Bastia', 'Pablo Perez', 'Nacho Fernandez', 'Fernando Gago', '???'],
-  DEL: ['Milton Gimenez', 'Leandro Caruso', 'Denis Stracqualursi', 'Danistone', 'El pipa Benedetto', '???'],
-  DT:  ['Claudio Úbeda', 'Gustavo Queenteros', 'Gustavo Costas', 'Gustavo Alfaro', 'Marcelo Gallardo', '???'],
+  ARQ: [
+    'Saraaaaaa SARAAAAAA',
+    'Rey en una TED Talk',
+    'Saja 586 minutos sin que le hagGOL',
+    'Chiquito Romero HIGHLIGHTS LIBERTADORES 2023',
+    'Navarro Montoya visitando los bosques de palermo',
+    'Armani (MUNDIAL 2018)',
+    'Gatti RIP',
+    'Abbondanzieri cagandose contra Alemania',
+    'Fillol 78',
+    '???',
+  ],
+  DEF: [
+    'Rolin N',
+    'Marin haciendo un penal',
+    'Tobio atropellando a uno',
+    'Pillud JAJA le dieron una placa a Pillud',
+    'Lomonaco TODO ROJO (salio negro)',
+    'Otamendi (el sanatorio)',
+    'Ruggeri LLAMADA DE STOICHKOV POLLO',
+    'Zanetti presidente del Inter',
+    'Samuel ayudante de campo de Scaloni',
+    '???',
+  ],
+  MED: [
+    'Campuzano dando pases para atrás',
+    'Polaco Bastia golazo de mita de cancha',
+    'Marcone cagandose a trompadas con uno en la calle',
+    'Mancuello esos 6 meses que sabia pegarle a la pelota',
+    'Paredes dando pases de 3 dedos',
+    'Toranzo dando pases de 3 dedos',
+    'Gago (con ligamentos)',
+    'Ortega en el tropitango',
+    'Boxini',
+    '???',
+  ],
+  DEL: [
+    'Wanchope despues de un asado',
+    'Pelado Silva cuando le salto el doping',
+    'PEPE SAND PRIME',
+    'Villa (NO SE HACEN CHISTES DE ESO FLACO)',
+    'Danistone fumando en el vestuario',
+    'Maurito Zarate que no va a jugar en otro club que no sea el tuyo',
+    'Farias picandola',
+    'El Pipa Benedetto en el Bosque',
+    'Tevez revolviendo fideos con la cara',
+    '???',
+  ],
+  DT: [
+    'Úbeda dale flaco es un ayudante de campo',
+    'Queenteros',
+    'El Canario Falcioni',
+    'Costas el que nunca da el brazo a torcer',
+    'El metalero Beccacece',
+    'El ricotero Sampaoli',
+    'El cazador de utopias imposibles desarmador de atomos Alfaro',
+    'El """"profe"""""Holan',
+    'Gallardo Sapardo',
+    '???',
+  ],
 };
 
-// Nombres reales del tier 6, ocultos hasta que se compran
-const CK_TIER6_REAL = {
-  ARQ: 'Lucritas "el muro" Campitongo',
-  DEF: 'Gonzalo "la torre" Marzoa',
-  MED: 'Alejandro "pie de angel" Girona',
-  DEL: 'Julian "araña" Panaro',
-  DT:  'Eric "Discoteca" Worm',
+// Nombre real del tier 10 (secreto), oculto hasta que se compra
+const CK_TIER10_REAL = {
+  ARQ: 'Chilavert LA CORRUPBOL',
+  DEF: 'Passarella (NO COMO PRESIDENTE)',
+  MED: 'Riquelme (NO COMO PRESIDENTE)',
+  DEL: '$776.420 la recaudación para una nueva edición del Superclásico del Fútbol Argentino... Marteeeeeen',
+  DT:  'Bianchi no comienden 6 contra San Martin de San Juan',
 };
 
-// costoBase y bonusClick por tier (índice 0 = tier 1, ... índice 5 = tier 6)
-const CK_TIERS_COSTO =  [50,    400,    3000,   20000,  140000,  900000];
-const CK_TIERS_BONUS =  [1,     6,      35,     180,    950,     5000];
+// costoBase y bonusClick por tier (índice 0 = tier 1, ... índice 9 = tier 10)
+// Progresión geométrica fuerte (~6.5x de costo por tier) para que completar las 5 posiciones
+// a tier máximo tome varios días de juego ocasional, no minutos.
+const CK_TIERS_COSTO = [50, 350, 2400, 16000, 105000, 680000, 4400000, 28000000, 180000000, 1150000000];
+const CK_TIERS_BONUS = [1,  5,   28,   150,   780,    4000,   20000,   100000,   500000,    2500000];
+
 
 function ckTierData(pos, tier, revelado) {
-  // tier va de 1 a 6. revelado=true muestra el nombre real del tier 6 (ya comprado)
+  // tier va de 1 a 10. revelado=true muestra el nombre real del tier 10 (ya comprado)
   const i = tier - 1;
   let nombre = CK_TIERS_NOMBRES[pos][i];
-  if (tier === 6 && revelado) nombre = CK_TIER6_REAL[pos];
+  if (tier === 10 && revelado) nombre = CK_TIER10_REAL[pos];
   return {
     nombre,
     costo: CK_TIERS_COSTO[i],
     bonus: CK_TIERS_BONUS[i],
   };
 }
+const CK_MAX_TIER = 10;
 
-// Definición de instalaciones (sin límite de cantidad, escalan en costo)
+// Definición de instalaciones (sin límite de cantidad, escalan en costo).
+// Costos y producción también escalados hacia arriba para acompañar la nueva curva de jugadores.
 const CK_BUILDINGS_POOL = [
-  { id:'b1', nombre:'Cancha de Entrenamiento', costoBase: 80,     prodBase: 1    },
-  { id:'b2', nombre:'Gimnasio',                costoBase: 600,    prodBase: 6    },
-  { id:'b3', nombre:'Centro Médico',           costoBase: 4500,   prodBase: 35   },
-  { id:'b4', nombre:'Hinchada Organizada',     costoBase: 25000,  prodBase: 180  },
-  { id:'b5', nombre:'Estadio Propio',          costoBase: 150000, prodBase: 950  },
-  { id:'b6', nombre:'Academia de Juveniles',   costoBase: 900000, prodBase: 5200 },
+  { id:'b1', nombre:'Cancha de Entrenamiento', costoBase: 60,        prodBase: 1      },
+  { id:'b2', nombre:'Gimnasio',                costoBase: 500,       prodBase: 7      },
+  { id:'b3', nombre:'Centro Médico',           costoBase: 5000,      prodBase: 45     },
+  { id:'b4', nombre:'Hinchada Organizada',      costoBase: 45000,     prodBase: 320    },
+  { id:'b5', nombre:'Estadio Propio',          costoBase: 380000,    prodBase: 2400   },
+  { id:'b6', nombre:'Academia de Juveniles',   costoBase: 3200000,   prodBase: 18000  },
+  { id:'b7', nombre:'Centro de Alto Rendimiento', costoBase: 27000000,  prodBase: 130000 },
+  { id:'b8', nombre:'Ciudad Deportiva',        costoBase: 220000000, prodBase: 950000 },
 ];
 
 const CK_CLUB_NAMES = [
-  { umbral: 0,        nombre: 'Club Amateur FC' },
-  { umbral: 5000,     nombre: 'Deportivo Ascenso' },
-  { umbral: 50000,    nombre: 'Atlético Regional' },
-  { umbral: 500000,   nombre: 'Club Profesional' },
-  { umbral: 5000000,  nombre: 'Gigante Nacional' },
-  { umbral: 50000000, nombre: 'Potencia Continental' },
-  { umbral: 500000000,nombre: 'Club Mundialista' },
+  { umbral: 0,          nombre: 'Club Amateur FC' },
+  { umbral: 5000,       nombre: 'Deportivo Ascenso' },
+  { umbral: 80000,      nombre: 'Atlético Regional' },
+  { umbral: 1500000,    nombre: 'Club Profesional' },
+  { umbral: 25000000,   nombre: 'Gigante Nacional' },
+  { umbral: 400000000,  nombre: 'Potencia Continental' },
+  { umbral: 6000000000, nombre: 'Club Mundialista' },
 ];
+
+// ── SISTEMA DE PRESTIGIO ──
+// Al llegar a tier máximo en las 5 posiciones, se puede "Ascender de Categoría":
+// resetea plata, jugadores e instalaciones, pero otorga un multiplicador permanente
+// sobre TODA la producción (click + por segundo) y sube de categoría visualmente.
+const CK_PRESTIGE_BONUS_PER_LEVEL = 0.25; // +25% de producción total por cada ascenso
+const CK_CATEGORIAS = [
+  'Liga Regional',
+  'Primera B',
+  'Primera División',
+  'Copa Libertadores',
+  'Champions League',
+  'Mundial de Clubes',
+  'Leyenda del Fútbol',
+];
+
+function ckCategoriaNombre(nivel) {
+  if (nivel < CK_CATEGORIAS.length) return CK_CATEGORIAS[nivel];
+  return `${CK_CATEGORIAS[CK_CATEGORIAS.length - 1]} ★${nivel - CK_CATEGORIAS.length + 1}`;
+}
+
+function ckTodasPosicionesAlMax() {
+  return CK_POSICIONES.every(pos => (ckState.positions[pos] || 0) >= CK_MAX_TIER);
+}
+
+function ckPrestigeMultiplier() {
+  return 1 + (ckState.prestigeLevel || 0) * CK_PRESTIGE_BONUS_PER_LEVEL;
+}
 
 let ckState = {
   money: 0,
   totalEarned: 0,
   perClickBase: 1,
-  positions: {},  // { ARQ: 0, DEF: 0, MED: 0, DEL: 0, DT: 0 } — 0 = vacía, 1-6 = tier actual
+  positions: {},  // { ARQ: 0, DEF: 0, MED: 0, DEL: 0, DT: 0 } — 0 = vacía, 1-10 = tier actual
   buildings: {},  // { b1: cantidad, ... }
+  prestigeLevel: 0, // veces que ascendió de categoría
 };
 let ckInterval = null;
 let ckSaveTimeout = null;
@@ -2725,6 +2818,7 @@ function ckDefaultState() {
     money: 0, totalEarned: 0, perClickBase: 1,
     positions: { ARQ:0, DEF:0, MED:0, DEL:0, DT:0 },
     buildings: {},
+    prestigeLevel: 0,
   };
 }
 
@@ -2772,7 +2866,7 @@ function ckPerClick() {
     const tier = ckState.positions[pos] || 0;
     if (tier > 0) total += ckTierData(pos, tier).bonus;
   });
-  return total;
+  return total * ckPrestigeMultiplier();
 }
 
 function ckPerSec() {
@@ -2781,7 +2875,7 @@ function ckPerSec() {
     const cant = ckState.buildings[b.id] || 0;
     total += cant * b.prodBase;
   });
-  return total;
+  return total * ckPrestigeMultiplier();
 }
 
 function ckPositionsFilled() {
@@ -2796,6 +2890,8 @@ function ckBuildingCost(b) {
 function ckClubName() {
   let nombre = CK_CLUB_NAMES[0].nombre;
   CK_CLUB_NAMES.forEach(n => { if (ckState.totalEarned >= n.umbral) nombre = n.nombre; });
+  const nivel = ckState.prestigeLevel || 0;
+  if (nivel > 0) nombre += ` — ${ckCategoriaNombre(nivel)}`;
   return nombre;
 }
 
@@ -2842,9 +2938,7 @@ function refreshClickerButtons() {
     btn.disabled = !canAfford;
     btn.style.opacity = canAfford ? '1' : '0.5';
     btn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
-    btn.classList.toggle('btn-gold', canAfford && btn.dataset.ckGold === '1');
-    btn.classList.toggle('btn-primary', canAfford && btn.dataset.ckGold !== '1');
-    btn.classList.toggle('btn-ghost', !canAfford);
+    btn.style.pointerEvents = canAfford ? 'auto' : 'none';
   });
 }
 
@@ -2859,11 +2953,46 @@ function renderClickerNumbers() {
   if (elName) elName.textContent = ckClubName();
 }
 
+function renderCkPrestigeCard() {
+  const el = document.getElementById('ck-prestige-card'); if (!el) return;
+  const nivel = ckState.prestigeLevel || 0;
+  const multiplierActual = ckPrestigeMultiplier();
+  const multiplierSiguiente = 1 + (nivel + 1) * CK_PRESTIGE_BONUS_PER_LEVEL;
+  const listo = ckTodasPosicionesAlMax();
+
+  let html = `<div class="card" style="border-color:${listo?'var(--gold)':'var(--border)'};background:${listo?'linear-gradient(135deg, rgba(245,200,66,0.1), rgba(255,107,53,0.05))':'var(--card-bg)'}">
+    <div class="card-title">🌟 ASCENSO DE CATEGORÍA</div>`;
+
+  if (nivel > 0) {
+    html += `<p style="font-size:0.8rem;margin-bottom:10px">Categoría actual: <b style="color:var(--gold)">${ckCategoriaNombre(nivel)}</b> · Multiplicador permanente: <b style="color:var(--green)">x${multiplierActual.toFixed(2)}</b></p>`;
+  }
+
+  if (listo) {
+    html += `<p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">¡Completaste las 5 posiciones a tier máximo! Podés ascender de categoría: reiniciás plata, jugadores e instalaciones, pero ganás un multiplicador permanente de <b style="color:var(--gold)">x${multiplierSiguiente.toFixed(2)}</b> en toda tu producción futura.</p>
+    <button class="btn btn-gold btn-full" onclick="ckPrestigeUp()">⬆️ Ascender a "${ckCategoriaNombre(nivel+1)}"</button>`;
+  } else {
+    html += `<p style="font-size:0.78rem;color:var(--muted)">Llevá las 5 posiciones a Tier ${CK_MAX_TIER}/${CK_MAX_TIER} para poder ascender de categoría y ganar un multiplicador permanente.</p>`;
+  }
+
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function ckPrestigeUp() {
+  if (!ckTodasPosicionesAlMax()) return;
+  if (!confirm(`¿Ascender a "${ckCategoriaNombre((ckState.prestigeLevel||0)+1)}"? Vas a perder toda tu plata, jugadores e instalaciones actuales, pero ganás un multiplicador permanente sobre toda tu producción futura.`)) return;
+  const nuevoNivel = (ckState.prestigeLevel || 0) + 1;
+  ckState = { ...ckDefaultState(), prestigeLevel: nuevoNivel };
+  renderClicker();
+  saveClickerState();
+}
+
 function renderClicker() {
   renderClickerNumbers();
   renderCkRanking();
+  renderCkPrestigeCard();
 
-  // Posiciones (5 fijas, cada una con 6 tiers de jugador)
+  // Posiciones (5 fijas, cada una con CK_MAX_TIER tiers de jugador)
   const playersList = document.getElementById('ck-players-list');
   const playersCount = document.getElementById('ck-players-count');
   if (playersCount) playersCount.textContent = `(${ckPositionsFilled()}/5)`;
@@ -2872,7 +3001,7 @@ function renderClicker() {
     CK_POSICIONES.forEach(pos => {
       const tierActual = ckState.positions[pos] || 0;
       const vacia = tierActual === 0;
-      const maxTier = tierActual >= 6;
+      const maxTier = tierActual >= CK_MAX_TIER;
 
       if (vacia) {
         // Mostrar opción para comprar tier 1 y desbloquear la posición
@@ -2886,7 +3015,7 @@ function renderClicker() {
           <button class="btn btn-sm ${canAfford ? 'btn-gold' : 'btn-ghost'}" ${!canAfford ? 'disabled' : ''} onclick="buyClickerTier('${pos}')" data-ck-cost="${t1.costo}" data-ck-gold="1" style="${!canAfford?'opacity:0.5;cursor:not-allowed':''}">${fmtMoney(t1.costo)}</button>
         </div>`;
       } else {
-        const actual = ckTierData(pos, tierActual, true); // revelado=true: si es tier 6, ya fue comprado y se muestra el nombre real
+        const actual = ckTierData(pos, tierActual, true); // revelado=true: si es tier máximo, ya fue comprado y se muestra el nombre real
         let extra = '';
         if (maxTier) {
           extra = `<span style="font-size:0.78rem;color:var(--gold);font-weight:700">⭐ Nivel máximo</span>`;
@@ -2897,7 +3026,7 @@ function renderClicker() {
         }
         html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(0,214,143,0.08);border:1px solid var(--green);border-radius:10px">
           <div style="flex:1">
-            <div style="font-weight:600;font-size:0.86rem">${CK_POS_LABEL[pos]} <span style="font-size:0.68rem;color:var(--gold)">· Tier ${tierActual}/6</span></div>
+            <div style="font-weight:600;font-size:0.86rem">${CK_POS_LABEL[pos]} <span style="font-size:0.68rem;color:var(--gold)">· Tier ${tierActual}/${CK_MAX_TIER}</span></div>
             <div style="font-size:0.74rem;color:var(--muted)">${actual.nombre} · +${fmtMoney(actual.bonus).replace('$','')} por click</div>
           </div>
           ${extra}
@@ -2938,10 +3067,12 @@ async function renderCkRanking() {
       let parsed = {};
       try { parsed = JSON.parse(row.valor); } catch {}
       const totalEarned = parsed.totalEarned || 0;
+      const prestigeLevel = parsed.prestigeLevel || 0;
       let nombre = CK_CLUB_NAMES[0].nombre;
       CK_CLUB_NAMES.forEach(n => { if (totalEarned >= n.umbral) nombre = n.nombre; });
-      return { clave: row.clave, nombre, totalEarned, esMio: row.clave === miClave };
-    }).sort((a,b) => b.totalEarned - a.totalEarned);
+      if (prestigeLevel > 0) nombre += ` (${ckCategoriaNombre(prestigeLevel)})`;
+      return { clave: row.clave, nombre, totalEarned, prestigeLevel, esMio: row.clave === miClave };
+    }).sort((a,b) => (b.prestigeLevel - a.prestigeLevel) || (b.totalEarned - a.totalEarned));
 
     let html = '';
     clubes.slice(0, 10).forEach((c, i) => {
@@ -2961,7 +3092,7 @@ async function renderCkRanking() {
 function buyClickerTier(pos) {
   if (!CK_POSICIONES.includes(pos)) return;
   const tierActual = ckState.positions[pos] || 0;
-  if (tierActual >= 6) return; // ya está en el máximo
+  if (tierActual >= CK_MAX_TIER) return; // ya está en el máximo
   const siguienteTier = tierActual + 1;
   const data = ckTierData(pos, siguienteTier);
   if (ckState.money < data.costo) return;
