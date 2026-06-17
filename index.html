@@ -284,6 +284,16 @@ select option{background:#1a1a24;}
         <div style="color:var(--muted)">→</div>
       </div>
     </div>
+    <div class="card" style="cursor:pointer" onclick="enterWordle()">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:2.2rem">🔤</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:1rem">Wordle de Futbolistas</div>
+          <div style="font-size:0.78rem;color:var(--muted)">100 niveles, adiviná el apellido del jugador</div>
+        </div>
+        <div style="color:var(--muted)">→</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -356,6 +366,31 @@ select option{background:#1a1a24;}
       <button class="btn btn-danger btn-sm" onclick="resetClickerConfirm()">🗑 Reiniciar progreso</button>
     </div>
 
+  </div>
+</div>
+
+<!-- SECRET WORDLE GAME SCREEN -->
+<div id="screen-wordle" class="screen">
+  <div class="header">
+    <div>
+      <h2 style="font-family:var(--fd);color:var(--gold);letter-spacing:2px">🔤 WORDLE</h2>
+      <div style="font-size:0.78rem;color:var(--muted)">Nivel <span id="wd-level-num">1</span>/100</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="exitWordle()">✕ Salir</button>
+  </div>
+  <div class="container" style="max-width:420px;display:flex;flex-direction:column;align-items:center">
+
+    <div id="wd-board" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
+
+    <div id="wd-message" style="min-height:24px;font-size:0.86rem;font-weight:600;margin-bottom:10px;text-align:center"></div>
+
+    <div id="wd-keyboard" style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:380px"></div>
+
+    <div id="wd-next-btn-wrap" style="margin-top:16px;width:100%;display:none">
+      <button class="btn btn-gold btn-full" onclick="wordleNextLevel()">Siguiente nivel →</button>
+    </div>
+
+    <button class="btn btn-ghost btn-sm" onclick="resetWordleConfirm()" style="margin-top:18px">🗑 Reiniciar progreso</button>
   </div>
 </div>
 
@@ -3157,6 +3192,208 @@ function resetClickerConfirm() {
     saveClickerState();
   }
 }
+
+// ═══════════════════════════════════════════════
+// EASTER EGG SECRETO #3 — WORDLE DE FUTBOLISTAS (100 niveles)
+// ═══════════════════════════════════════════════
+const WD_STORAGE_KEY_BASE = 'wordle_save_v1';
+function wdStorageKey() { return `${WD_STORAGE_KEY_BASE}_${getCkDeviceId()}`; }
+
+// 100 apellidos de futbolistas (históricos y actuales), evitando los demasiado obvios.
+// Cada nivel puede tener su propio largo de palabra.
+const WD_PALABRAS = ['ZIDANE', 'RONALDINHO', 'KAKA', 'XAVI', 'INIESTA', 'PIRLO', 'BUFFON', 'CASILLAS', 'RAMOS', 'PIQUE', 'PUYOL', 'VIDAL', 'SANCHEZ', 'CHILAVERT', 'SCALONI', 'SIMEONE', 'BIELSA', 'GALLARDO', 'PASSARELLA', 'KEMPES', 'ARDILES', 'CANIGGIA', 'SORIN', 'ZANETTI', 'SAMUEL', 'CAMBIASSO', 'RIQUELME', 'TEVEZ', 'HIGUAIN', 'LAVEZZI', 'AGUERO', 'BATISTUTA', 'CRESPO', 'SAVIOLA', 'ORTEGA', 'VERON', 'REDONDO', 'SENSINI', 'RUGGERI', 'GOYCOCHEA', 'BURRUCHAGA', 'VALDANO', 'GALVAN', 'TARANTINI', 'FILLOL', 'HEREDIA', 'GENTILE', 'LUQUE', 'BOCHINI', 'NJANKA', 'DESAILLY', 'DESCHAMPS', 'MAKELELE', 'HENRY', 'TREZEGUET', 'VIEIRA', 'PETIT', 'LIZARAZU', 'THURAM', 'KLINSMANN', 'MATTHAUS', 'RUMMENIGGE', 'BECKENBAUER', 'MULLER', 'NEUER', 'LAHM', 'KROOS', 'OZIL', 'KLOSE', 'PODOLSKI', 'SCHWEINSTEIGER', 'BALLACK', 'KAHN', 'EFFENBERG', 'LITTBARSKI', 'VOLLER', 'BREHME', 'BUCHWALD', 'SAMMER', 'HASSLER', 'RIEDLE', 'SEELER', 'OVERATH', 'NETZER', 'BECKER', 'HOENESS', 'MAIER', 'VOGTS', 'NESTA', 'MALDINI', 'CANNAVARO', 'BAGGIO', 'DONADONI', 'ZOFF', 'ALTOBELLI', 'TARDELLI', 'ROSSI', 'SCIREA', 'VIALLI', 'ZAMBROTTA'];
+const WD_MAX_LEVEL = WD_PALABRAS.length;
+const WD_MAX_INTENTOS = 6;
+
+let wdState = { nivelActual: 1, completados: 0 };
+let wdGame = { palabra: '', intentos: [], filaActual: 0, terminado: false, letrasEstado: {} };
+
+async function enterWordle() {
+  goTo('screen-wordle');
+  await loadWordleState();
+  startWordleLevel(wdState.nivelActual);
+}
+
+function exitWordle() {
+  saveWordleState();
+  goTo('screen-games-menu');
+}
+
+async function loadWordleState() {
+  try {
+    const { data } = await db.from('configuracion').select('valor').eq('clave', wdStorageKey()).single();
+    if (data && data.valor) {
+      const parsed = JSON.parse(data.valor);
+      wdState = { nivelActual: 1, completados: 0, ...parsed };
+    } else {
+      wdState = { nivelActual: 1, completados: 0 };
+    }
+  } catch (e) {
+    wdState = { nivelActual: 1, completados: 0 };
+  }
+}
+
+function saveWordleState() {
+  db.from('configuracion').upsert({ clave: wdStorageKey(), valor: JSON.stringify(wdState) }, { onConflict: 'clave' })
+    .catch(e => console.error('Error guardando progreso del wordle:', e));
+}
+
+function startWordleLevel(nivel) {
+  if (nivel > WD_MAX_LEVEL) nivel = WD_MAX_LEVEL;
+  wdState.nivelActual = nivel;
+  const palabra = WD_PALABRAS[nivel - 1];
+  wdGame = { palabra, intentos: [], filaActual: 0, terminado: false, letrasEstado: {} };
+  document.getElementById('wd-level-num').textContent = nivel;
+  document.getElementById('wd-message').textContent = '';
+  document.getElementById('wd-next-btn-wrap').style.display = 'none';
+  renderWordleBoard();
+  renderWordleKeyboard();
+}
+
+function renderWordleBoard() {
+  const board = document.getElementById('wd-board'); if (!board) return;
+  const largo = wdGame.palabra.length;
+  let html = '';
+  for (let f = 0; f < WD_MAX_INTENTOS; f++) {
+    html += `<div style="display:flex;gap:6px;justify-content:center">`;
+    for (let c = 0; c < largo; c++) {
+      let letra = '', estado = '';
+      if (f < wdGame.intentos.length) {
+        letra = wdGame.intentos[f].letras[c];
+        estado = wdGame.intentos[f].estados[c];
+      } else if (f === wdGame.filaActual) {
+        letra = wdGame.actual ? (wdGame.actual[c] || '') : '';
+      }
+      const bg = estado === 'correcta' ? 'var(--green)' : estado === 'presente' ? 'var(--gold)' : estado === 'ausente' ? '#3a3a48' : 'var(--bg3)';
+      const border = estado ? bg : 'var(--border)';
+      const cellSize = largo > 9 ? '28px' : largo > 7 ? '34px' : '42px';
+      const fontSize = largo > 9 ? '0.9rem' : largo > 7 ? '1.1rem' : '1.3rem';
+      html += `<div style="width:${cellSize};height:${cellSize};border:2px solid ${border};background:${estado?bg:'transparent'};border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${fontSize};font-family:var(--fm);color:${estado?'#0a0a0f':'var(--text)'}">${letra}</div>`;
+    }
+    html += `</div>`;
+  }
+  board.innerHTML = html;
+}
+
+function renderWordleKeyboard() {
+  const kb = document.getElementById('wd-keyboard'); if (!kb) return;
+  const filas = ['QWERTYUIOP', 'ASDFGHJKLÑ', 'ZXCVBNM'];
+  let html = '';
+  filas.forEach((fila, i) => {
+    html += `<div style="display:flex;gap:4px;justify-content:center">`;
+    if (i === 2) html += wdKeyHTML('ENTER', 'Enter', true);
+    fila.split('').forEach(l => html += wdKeyHTML(l, l));
+    if (i === 2) html += wdKeyHTML('BACK', '⌫', true);
+    html += `</div>`;
+  });
+  kb.innerHTML = html;
+}
+
+function wdKeyHTML(key, label, ancha) {
+  const estado = wdGame.letrasEstado[key] || '';
+  const bg = estado === 'correcta' ? 'var(--green)' : estado === 'presente' ? 'var(--gold)' : estado === 'ausente' ? '#2a2a36' : 'var(--bg3)';
+  const color = estado ? '#0a0a0f' : 'var(--text)';
+  const width = ancha ? '52px' : '30px';
+  return `<button onclick="wdKeyPress('${key}')" style="width:${width};height:42px;border:none;border-radius:6px;background:${bg};color:${color};font-weight:700;font-size:${ancha?'0.72rem':'0.86rem'};cursor:pointer;font-family:var(--fb)">${label}</button>`;
+}
+
+function wdKeyPress(key) {
+  if (wdGame.terminado) return;
+  if (!wdGame.actual) wdGame.actual = '';
+  const largo = wdGame.palabra.length;
+
+  if (key === 'BACK') {
+    wdGame.actual = wdGame.actual.slice(0, -1);
+  } else if (key === 'ENTER') {
+    if (wdGame.actual.length !== largo) {
+      wdShowMessage('Faltan letras', 'var(--accent)');
+      return;
+    }
+    wdSubmitGuess(wdGame.actual);
+    return;
+  } else {
+    if (wdGame.actual.length < largo) wdGame.actual += key;
+  }
+  renderWordleBoard();
+}
+
+function wdSubmitGuess(guess) {
+  const palabra = wdGame.palabra;
+  const letras = guess.split('');
+  const objetivo = palabra.split('');
+  const estados = new Array(letras.length).fill('ausente');
+
+  // Primera pasada: marcar correctas
+  const usado = new Array(objetivo.length).fill(false);
+  letras.forEach((l, i) => {
+    if (l === objetivo[i]) { estados[i] = 'correcta'; usado[i] = true; }
+  });
+  // Segunda pasada: marcar presentes (en otra posición)
+  letras.forEach((l, i) => {
+    if (estados[i] === 'correcta') return;
+    const idx = objetivo.findIndex((o, j) => o === l && !usado[j]);
+    if (idx !== -1) { estados[i] = 'presente'; usado[idx] = true; }
+  });
+
+  wdGame.intentos.push({ letras, estados });
+  wdGame.filaActual++;
+  wdGame.actual = '';
+
+  // Actualizar estado del teclado (sin degradar: correcta > presente > ausente)
+  const prioridad = { correcta: 3, presente: 2, ausente: 1 };
+  letras.forEach((l, i) => {
+    const actual = wdGame.letrasEstado[l];
+    if (!actual || prioridad[estados[i]] > prioridad[actual]) wdGame.letrasEstado[l] = estados[i];
+  });
+
+  renderWordleBoard();
+  renderWordleKeyboard();
+
+  if (guess === palabra) {
+    wdGame.terminado = true;
+    wdShowMessage('🎉 ¡Correcto!', 'var(--green)');
+    if (wdState.nivelActual > (wdState.completados || 0)) wdState.completados = wdState.nivelActual;
+    if (wdState.nivelActual < WD_MAX_LEVEL) {
+      wdState.nivelActual = wdState.nivelActual; // se mantiene, avanza al apretar "Siguiente"
+      document.getElementById('wd-next-btn-wrap').style.display = '';
+    } else {
+      wdShowMessage('🏆 ¡Completaste los 100 niveles!', 'var(--gold)');
+    }
+    saveWordleState();
+  } else if (wdGame.filaActual >= WD_MAX_INTENTOS) {
+    wdGame.terminado = true;
+    wdShowMessage(`💀 Era: ${palabra}`, 'var(--accent)');
+    document.getElementById('wd-next-btn-wrap').style.display = '';
+  }
+}
+
+function wdShowMessage(msg, color) {
+  const el = document.getElementById('wd-message');
+  if (el) { el.textContent = msg; el.style.color = color; }
+}
+
+function wordleNextLevel() {
+  const siguiente = Math.min(wdState.nivelActual + 1, WD_MAX_LEVEL);
+  startWordleLevel(siguiente);
+}
+
+function resetWordleConfirm() {
+  if (confirm('¿Seguro que querés reiniciar tu progreso del Wordle? Volvés al nivel 1.')) {
+    wdState = { nivelActual: 1, completados: 0 };
+    saveWordleState();
+    startWordleLevel(1);
+  }
+}
+
+// Controles de teclado físico para el Wordle
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('screen-wordle')?.classList.contains('active')) return;
+  if (wdGame.terminado) return;
+  const k = e.key.toUpperCase();
+  if (k === 'ENTER') { wdKeyPress('ENTER'); return; }
+  if (k === 'BACKSPACE') { wdKeyPress('BACK'); return; }
+  if (/^[A-ZÑ]$/.test(k)) { wdKeyPress(k); }
+});
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
