@@ -2171,21 +2171,10 @@ async function checkAutoClose() {
       console.log('Auto-close: predicciones generales cerradas');
     }
   }
-
-  // Fases
-  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
-  let changed = false;
-  for (const f of FASES) {
-    const key = `auto_close_fase_${f.id}`;
-    if (cfg[key] && fasesHab[f.id]) {
-      if (new Date(cfg[key]) <= now) {
-        fasesHab[f.id] = false;
-        changed = true;
-        console.log(`Auto-close: fase ${f.id} cerrada`);
-      }
-    }
-  }
-  if (changed) await setConfig('fases_habilitadas', JSON.stringify(fasesHab));
+  // NOTA: el cierre por FASE COMPLETA quedó obsoleto — ahora cada partido se cierra
+  // individualmente según su hora_inicio (ver estaPartidoAbierto). Este chequeo se
+  // eliminó porque un valor viejo guardado en auto_close_fase_X podía cerrar toda
+  // una fecha de golpe apenas arrancaba un solo partido.
 }
 setInterval(checkAutoClose, 30000);
 checkAutoClose(); // correr una vez al iniciar
