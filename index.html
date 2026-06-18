@@ -1219,21 +1219,10 @@ async function openDetalle(codigo) {
     body += `</div>`;
 
     // ── PARTIDOS POR FASE ──
+    const ahora = new Date();
     for (const fase of FASES) {
       const partidosFase = (todosPartidos||[]).filter(p => p.fase === fase.id);
       if (!partidosFase.length) continue;
-
-      // La fase está "abierta" si está habilitada (los pronósticos aún se pueden cargar)
-      const faseAbierta = fasesHab[fase.id] === true;
-
-      // Ocultar pronósticos ajenos si la fase está abierta
-      if (faseAbierta && !verTodo) {
-        body += `<div style="margin-bottom:14px">
-          <h4 style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">⚽ ${fase.label}</h4>
-          <div class="alert alert-info" style="font-size:0.78rem">🔒 Se revelarán cuando cierre esta fase.</div>
-        </div>`;
-        continue;
-      }
 
       body += `<div style="margin-bottom:14px">
         <h4 style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">⚽ ${fase.label}</h4>`;
@@ -1241,6 +1230,17 @@ async function openDetalle(codigo) {
       partidosFase.forEach(p => {
         const pr = pronoMap[p.id];
         const res = resMap[p.id];
+
+        // Ocultar pronóstico ajeno si el partido todavía está abierto (por hora_inicio)
+        const partidoAun = estaPartidoAbierto(p, !!res);
+        if (partidoAun && !verTodo) {
+          body += `<div class="detail-row"><div class="dleft">
+            <div style="font-size:0.82rem">${p.es_bonus?'⭐ ':''}${p.local} vs ${p.visitante}</div>
+            <div class="dsub" style="color:var(--muted)">🔒 Cierra antes del partido</div>
+          </div><span class="dpts zero">– pts</span></div>`;
+          return;
+        }
+
         let desc = 'Sin pronóstico', pts = 0;
 
         if (pr) {
