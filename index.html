@@ -322,6 +322,11 @@ select option{background:#1a1a24;}
       </div>
     </div>
     <p style="font-size:0.74rem;color:var(--muted);margin-top:14px;text-align:center">Usá las flechas del teclado o deslizá con el dedo para mover las fichas. Llegá a 2048 🏆</p>
+
+    <div class="card" style="width:100%;margin-top:18px">
+      <div class="card-title">🏆 RANKING — MEJOR PUNTAJE</div>
+      <div id="g2048-ranking-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
   </div>
 </div>
 
@@ -369,6 +374,28 @@ select option{background:#1a1a24;}
   </div>
 </div>
 
+<!-- SECRET WORDLE LEVEL MAP SCREEN -->
+<div id="screen-wordle-map" class="screen">
+  <div class="header">
+    <h2 style="font-family:var(--fd);color:var(--gold);letter-spacing:2px">🔤 WORDLE</h2>
+    <button class="btn btn-ghost btn-sm" onclick="exitWordleMap()">✕ Salir</button>
+  </div>
+  <div class="container" style="max-width:480px">
+    <div class="card" style="text-align:center">
+      <div class="card-title" style="justify-content:center">MAPA DE NIVELES</div>
+      <p id="wd-map-progreso" style="font-size:0.8rem;color:var(--muted);margin-bottom:14px">0/100 completados</p>
+      <div id="wd-map-grid" style="display:grid;grid-template-columns:repeat(auto-fill, 42px);gap:8px;justify-content:center"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🏆 RANKING — MEJOR NIVEL</div>
+      <div id="wd-ranking-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+    <div class="card" style="text-align:center">
+      <button class="btn btn-danger btn-sm" onclick="resetWordleConfirm()">🗑 Reiniciar progreso</button>
+    </div>
+  </div>
+</div>
+
 <!-- SECRET WORDLE GAME SCREEN -->
 <div id="screen-wordle" class="screen">
   <div class="header">
@@ -390,7 +417,7 @@ select option{background:#1a1a24;}
       <button class="btn btn-gold btn-full" onclick="wordleNextLevel()">Siguiente nivel →</button>
     </div>
 
-    <button class="btn btn-ghost btn-sm" onclick="resetWordleConfirm()" style="margin-top:18px">🗑 Reiniciar progreso</button>
+    <button class="btn btn-ghost btn-sm" onclick="exitWordle()" style="margin-top:18px">← Volver al mapa</button>
   </div>
 </div>
 
@@ -969,12 +996,14 @@ async function renderTabla() {
     { data: preds },
     { data: todosProno },
     { data: todosPartidos },
+    { data: todosResultados },
   ] = await Promise.all([
     db.from('usuarios').select('*'),
     getConfig(),
     db.from('predicciones_iniciales').select('codigo'),
     db.from('pronosticos').select('codigo_usuario, partido_id'),
-    db.from('partidos').select('id, fase'),
+    db.from('partidos').select('*'),
+    db.from('resultados').select('partido_id'),
   ]);
   if (!users?.length) { cont.innerHTML = '<div class="empty"><span>👥</span>Sin usuarios</div>'; return; }
 
@@ -984,25 +1013,28 @@ async function renderTabla() {
   // Quién completó predicciones generales
   const predSet = new Set(preds?.map(p => p.codigo));
 
-  // Quién cargó pronósticos por fase
-  let fasesHab = {}; try { fasesHab = JSON.parse(cfg.fases_habilitadas||'{}'); } catch {}
-  const fasesAbiertas = FASES.filter(f => fasesHab[f.id]);
-  const partidosPorFase = {};
-  todosPartidos?.forEach(p => {
-    if (!partidosPorFase[p.fase]) partidosPorFase[p.fase] = [];
-    partidosPorFase[p.fase].push(p.id);
-  });
-  // pronósticos por usuario y fase
-  const pronosPorUsuarioFase = {};
-  todosProno?.forEach(pr => {
-    const partido = todosPartidos?.find(p => p.id === pr.partido_id);
-    if (!partido) return;
-    const key = `${pr.codigo_usuario}_${partido.fase}`;
-    if (!pronosPorUsuarioFase[key]) pronosPorUsuarioFase[key] = 0;
-    pronosPorUsuarioFase[key]++;
-  });
+  // Encontrar el próximo partido sin resultado oficial (el más próximo cronológicamente entre TODOS los partidos)
+  const resSet = new Set(todosResultados?.map(r => r.partido_id));
+  const sinResultado = (todosPartidos || []).filter(p => !resSet.has(p.id));
+  const conHora = sinResultado.filter(p => p.hora_inicio);
+  conHora.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
+  const proximoPartido = conHora[0] || sinResultado[0] || null;
+
+  // Quiénes ya cargaron pronóstico para ese partido específico
+  const pronosProximo = new Set(
+    (todosProno || []).filter(pr => proximoPartido && pr.partido_id === proximoPartido.id).map(pr => pr.codigo_usuario)
+  );
 
   let html = `<div class="card"><div class="card-title">🏅 TABLA DE POSICIONES</div>`;
+
+  if (proximoPartido) {
+    html += `<div class="alert alert-info" style="font-size:0.78rem;margin-bottom:14px">
+      ℹ️ <b>¿Cargó su pronóstico para el próximo partido?</b><br>
+      Próximo partido sin resultado: <b>${proximoPartido.local} vs ${proximoPartido.visitante}</b>${proximoPartido.es_bonus?' ⭐':''}.
+      Debajo de cada usuario: <span style="color:var(--green)">✅</span> ya cargó su pronóstico para ese partido, <span style="color:var(--accent)">❌</span> todavía no.
+    </div>`;
+  }
+
   sorted.forEach((u,i) => {
     const p = puntos[u.codigo]||0;
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
@@ -1011,17 +1043,17 @@ async function renderTabla() {
     // Estado predicciones generales
     const tienePred = predSet.has(u.codigo);
     const predIcon = cfg.pred_abiertas === 'true'
-      ? (tienePred ? '✅' : '⏳')
+      ? `<span title="Predicciones generales" style="font-size:0.72rem">${tienePred?'✅':'⏳'} Generales</span>`
       : '';
 
-    // Estado por fase abierta
-    const faseIcons = fasesAbiertas.map(f => {
-      const total = partidosPorFase[f.id]?.length || 0;
-      const cargados = pronosPorUsuarioFase[`${u.codigo}_${f.id}`] || 0;
-      return total > 0 ? (cargados >= total ? '✅' : cargados > 0 ? '⚠️' : '⏳') : null;
-    }).filter(Boolean);
+    // Estado próximo partido
+    let proximoIcon = '';
+    if (proximoPartido) {
+      const cargo = pronosProximo.has(u.codigo);
+      proximoIcon = `<span title="¿Cargó su pronóstico para el próximo partido?" style="font-size:0.72rem">${cargo?'✅':'❌'} Próximo partido</span>`;
+    }
 
-    const badges = [predIcon, ...faseIcons].filter(Boolean).join(' ');
+    const badges = [predIcon, proximoIcon].filter(Boolean).join(' ');
 
     html += `<div class="tabla-row${isMe?' me':''}">
       <span style="font-size:1.1rem;width:26px">${medal}</span>
@@ -1034,13 +1066,6 @@ async function renderTabla() {
     </div>`;
   });
 
-  // Leyenda
-  if (fasesAbiertas.length || cfg.pred_abiertas === 'true') {
-    html += `<div style="font-size:0.72rem;color:var(--muted);margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px">
-      ✅ Completado &nbsp;⚠️ Parcial &nbsp;⏳ Sin cargar
-      ${cfg.pred_abiertas === 'true' ? '&nbsp;· primer ícono = predicciones generales' : ''}
-    </div>`;
-  }
   html += `</div>`;
   cont.innerHTML = html;
 }
@@ -2529,6 +2554,7 @@ function new2048Game() {
   add2048Tile();
   add2048Tile();
   render2048();
+  render2048Ranking();
 }
 
 function add2048Tile() {
@@ -2564,7 +2590,11 @@ function render2048() {
   }
   board.innerHTML = html;
   document.getElementById('g2048-score').textContent = g2048.score;
-  if (g2048.score > g2048.best) { g2048.best = g2048.score; localStorage.setItem('g2048_best', g2048.best); }
+  if (g2048.score > g2048.best) {
+    g2048.best = g2048.score;
+    localStorage.setItem('g2048_best', g2048.best);
+    save2048Best();
+  }
   document.getElementById('g2048-best').textContent = g2048.best;
 }
 
@@ -3205,18 +3235,22 @@ const WD_PALABRAS = ['ZIDANE', 'RONALDINHO', 'KAKA', 'XAVI', 'INIESTA', 'PIRLO',
 const WD_MAX_LEVEL = WD_PALABRAS.length;
 const WD_MAX_INTENTOS = 6;
 
-let wdState = { nivelActual: 1, completados: 0 };
-let wdGame = { palabra: '', intentos: [], filaActual: 0, terminado: false, letrasEstado: {} };
+let wdState = { mejorNivel: 0 }; // mejorNivel = cantidad de niveles completados consecutivos desde el 1
+let wdGame = { palabra: '', intentos: [], filaActual: 0, terminado: false, letrasEstado: {}, nivel: 1 };
 
 async function enterWordle() {
-  goTo('screen-wordle');
+  goTo('screen-wordle-map');
   await loadWordleState();
-  startWordleLevel(wdState.nivelActual);
+  renderWordleMap();
+}
+
+function exitWordleMap() {
+  goTo('screen-games-menu');
 }
 
 function exitWordle() {
-  saveWordleState();
-  goTo('screen-games-menu');
+  goTo('screen-wordle-map');
+  renderWordleMap();
 }
 
 async function loadWordleState() {
@@ -3224,25 +3258,79 @@ async function loadWordleState() {
     const { data } = await db.from('configuracion').select('valor').eq('clave', wdStorageKey()).single();
     if (data && data.valor) {
       const parsed = JSON.parse(data.valor);
-      wdState = { nivelActual: 1, completados: 0, ...parsed };
+      wdState = { mejorNivel: 0, ...parsed };
     } else {
-      wdState = { nivelActual: 1, completados: 0 };
+      wdState = { mejorNivel: 0 };
     }
   } catch (e) {
-    wdState = { nivelActual: 1, completados: 0 };
+    wdState = { mejorNivel: 0 };
   }
 }
 
-function saveWordleState() {
-  db.from('configuracion').upsert({ clave: wdStorageKey(), valor: JSON.stringify(wdState) }, { onConflict: 'clave' })
-    .catch(e => console.error('Error guardando progreso del wordle:', e));
+async function saveWordleState() {
+  try {
+    await db.from('configuracion').upsert({ clave: wdStorageKey(), valor: JSON.stringify(wdState) }, { onConflict: 'clave' });
+  } catch (e) { console.error('Error guardando progreso del wordle:', e); }
+}
+
+function renderWordleMap() {
+  const cont = document.getElementById('wd-map-grid'); if (!cont) return;
+  const desbloqueado = (wdState.mejorNivel || 0) + 1; // próximo nivel jugable
+  let html = '';
+  for (let n = 1; n <= WD_MAX_LEVEL; n++) {
+    const completado = n <= (wdState.mejorNivel || 0);
+    const jugable = n <= desbloqueado;
+    let bg, color, border;
+    if (completado) { bg = 'var(--green)'; color = '#0a0a0f'; border = 'var(--green)'; }
+    else if (jugable) { bg = 'var(--bg3)'; color = 'var(--text)'; border = 'var(--gold)'; }
+    else { bg = 'var(--bg3)'; color = 'var(--muted)'; border = 'var(--border)'; }
+    html += `<button ${jugable ? `onclick="enterWordleLevel(${n})"` : 'disabled'}
+      style="width:42px;height:42px;border-radius:8px;border:2px solid ${border};background:${bg};color:${color};font-weight:700;font-size:0.82rem;cursor:${jugable?'pointer':'not-allowed'};display:flex;align-items:center;justify-content:center;opacity:${jugable?'1':'0.5'}">
+      ${completado ? '✓' : jugable ? n : '🔒'}
+    </button>`;
+  }
+  cont.innerHTML = html;
+  const elProgreso = document.getElementById('wd-map-progreso');
+  if (elProgreso) elProgreso.textContent = `${wdState.mejorNivel || 0}/${WD_MAX_LEVEL} completados`;
+  renderWdRanking();
+}
+
+async function renderWdRanking() {
+  const el = document.getElementById('wd-ranking-list'); if (!el) return;
+  try {
+    const { data } = await db.from('configuracion').select('clave, valor').like('clave', `${WD_STORAGE_KEY_BASE}_%`);
+    if (!data?.length) { el.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">Todavía no hay otros jugadores registrados.</div>`; return; }
+    const miClave = wdStorageKey();
+    const jugadores = data.map(row => {
+      let parsed = {};
+      try { parsed = JSON.parse(row.valor); } catch {}
+      return { clave: row.clave, mejorNivel: parsed.mejorNivel || 0, esMio: row.clave === miClave };
+    }).sort((a,b) => b.mejorNivel - a.mejorNivel);
+
+    let html = '';
+    jugadores.slice(0, 10).forEach((j, i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${j.esMio?'rgba(245,200,66,0.1)':'var(--bg3)'};border:1px solid ${j.esMio?'var(--gold)':'var(--border)'};border-radius:10px">
+        <span style="font-size:0.95rem;width:24px">${medal}</span>
+        <span style="flex:1;font-size:0.84rem;font-weight:${j.esMio?'700':'500'}">${j.esMio?'Vos':'Jugador'}</span>
+        <span style="font-family:var(--fm);font-size:0.84rem;color:var(--gold);font-weight:700">Nivel ${j.mejorNivel}</span>
+      </div>`;
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">No se pudo cargar el ranking.</div>`;
+  }
+}
+
+function enterWordleLevel(nivel) {
+  goTo('screen-wordle');
+  startWordleLevel(nivel);
 }
 
 function startWordleLevel(nivel) {
   if (nivel > WD_MAX_LEVEL) nivel = WD_MAX_LEVEL;
-  wdState.nivelActual = nivel;
   const palabra = WD_PALABRAS[nivel - 1];
-  wdGame = { palabra, intentos: [], filaActual: 0, terminado: false, letrasEstado: {} };
+  wdGame = { palabra, intentos: [], filaActual: 0, terminado: false, letrasEstado: {}, actual: '', nivel };
   document.getElementById('wd-level-num').textContent = nivel;
   document.getElementById('wd-message').textContent = '';
   document.getElementById('wd-next-btn-wrap').style.display = 'none';
@@ -3352,14 +3440,16 @@ function wdSubmitGuess(guess) {
   if (guess === palabra) {
     wdGame.terminado = true;
     wdShowMessage('🎉 ¡Correcto!', 'var(--green)');
-    if (wdState.nivelActual > (wdState.completados || 0)) wdState.completados = wdState.nivelActual;
-    if (wdState.nivelActual < WD_MAX_LEVEL) {
-      wdState.nivelActual = wdState.nivelActual; // se mantiene, avanza al apretar "Siguiente"
+    // Solo avanza el "mejor nivel" si este nivel es exactamente el siguiente al ya completado (progreso secuencial)
+    if (wdGame.nivel === (wdState.mejorNivel || 0) + 1) {
+      wdState.mejorNivel = wdGame.nivel;
+      saveWordleState();
+    }
+    if (wdGame.nivel < WD_MAX_LEVEL) {
       document.getElementById('wd-next-btn-wrap').style.display = '';
     } else {
       wdShowMessage('🏆 ¡Completaste los 100 niveles!', 'var(--gold)');
     }
-    saveWordleState();
   } else if (wdGame.filaActual >= WD_MAX_INTENTOS) {
     wdGame.terminado = true;
     wdShowMessage(`💀 Era: ${palabra}`, 'var(--accent)');
@@ -3373,15 +3463,19 @@ function wdShowMessage(msg, color) {
 }
 
 function wordleNextLevel() {
-  const siguiente = Math.min(wdState.nivelActual + 1, WD_MAX_LEVEL);
+  const siguiente = wdGame.nivel + 1;
+  if (siguiente > WD_MAX_LEVEL) { exitWordle(); return; }
+  // Si el siguiente nivel todavía no está desbloqueado (porque este se jugó suelto desde el mapa sin ser el próximo), vuelve al mapa
+  const desbloqueado = (wdState.mejorNivel || 0) + 1;
+  if (siguiente > desbloqueado) { exitWordle(); return; }
   startWordleLevel(siguiente);
 }
 
 function resetWordleConfirm() {
-  if (confirm('¿Seguro que querés reiniciar tu progreso del Wordle? Volvés al nivel 1.')) {
-    wdState = { nivelActual: 1, completados: 0 };
+  if (confirm('¿Seguro que querés reiniciar tu progreso del Wordle? Se pierden todos los niveles completados.')) {
+    wdState = { mejorNivel: 0 };
     saveWordleState();
-    startWordleLevel(1);
+    exitWordle();
   }
 }
 
@@ -3394,6 +3488,43 @@ document.addEventListener('keydown', (e) => {
   if (k === 'BACKSPACE') { wdKeyPress('BACK'); return; }
   if (/^[A-ZÑ]$/.test(k)) { wdKeyPress(k); }
 });
+
+// ── Scoreboard de 2048 (top 10 entre todos los dispositivos) ──
+const G2048_STORAGE_KEY_BASE = 'g2048_save_v1';
+function g2048StorageKey() { return `${G2048_STORAGE_KEY_BASE}_${getCkDeviceId()}`; }
+
+async function save2048Best() {
+  try {
+    await db.from('configuracion').upsert({ clave: g2048StorageKey(), valor: JSON.stringify({ best: g2048.best }) }, { onConflict: 'clave' });
+  } catch (e) { console.error('Error guardando mejor puntaje de 2048:', e); }
+}
+
+async function render2048Ranking() {
+  const el = document.getElementById('g2048-ranking-list'); if (!el) return;
+  try {
+    const { data } = await db.from('configuracion').select('clave, valor').like('clave', `${G2048_STORAGE_KEY_BASE}_%`);
+    if (!data?.length) { el.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">Todavía no hay otros puntajes registrados.</div>`; return; }
+    const miClave = g2048StorageKey();
+    const jugadores = data.map(row => {
+      let parsed = {};
+      try { parsed = JSON.parse(row.valor); } catch {}
+      return { clave: row.clave, best: parsed.best || 0, esMio: row.clave === miClave };
+    }).sort((a,b) => b.best - a.best);
+
+    let html = '';
+    jugadores.slice(0, 10).forEach((j, i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}°`;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${j.esMio?'rgba(245,200,66,0.1)':'var(--bg3)'};border:1px solid ${j.esMio?'var(--gold)':'var(--border)'};border-radius:10px">
+        <span style="font-size:0.95rem;width:24px">${medal}</span>
+        <span style="flex:1;font-size:0.84rem;font-weight:${j.esMio?'700':'500'}">${j.esMio?'Vos':'Jugador'}</span>
+        <span style="font-family:var(--fm);font-size:0.84rem;color:var(--gold);font-weight:700">${j.best.toLocaleString('es-AR')}</span>
+      </div>`;
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">No se pudo cargar el ranking.</div>`;
+  }
+}
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
