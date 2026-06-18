@@ -994,16 +994,12 @@ async function renderTabla() {
     { data: users },
     cfg,
     { data: preds },
-    { data: todosProno },
     { data: todosPartidos },
-    { data: todosResultados },
   ] = await Promise.all([
     db.from('usuarios').select('*'),
     getConfig(),
     db.from('predicciones_iniciales').select('codigo'),
-    db.from('pronosticos').select('codigo_usuario, partido_id'),
     db.from('partidos').select('*'),
-    db.from('resultados').select('partido_id'),
   ]);
   if (!users?.length) { cont.innerHTML = '<div class="empty"><span>👥</span>Sin usuarios</div>'; return; }
 
@@ -1026,10 +1022,13 @@ async function renderTabla() {
   abiertos.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
   const proximoPartido = abiertos[0] || null;
 
-  // Quiénes ya cargaron pronóstico para ese partido específico
-  const pronosProximo = new Set(
-    (todosProno || []).filter(pr => proximoPartido && pr.partido_id === proximoPartido.id).map(pr => pr.codigo_usuario)
-  );
+  // Quiénes ya cargaron pronóstico para ese partido específico — query chica y filtrada
+  // (NUNCA traer toda la tabla pronosticos sin filtro: supera el límite de 1000 filas de Supabase)
+  const pronosProximo = new Set();
+  if (proximoPartido) {
+    const { data: pronoProximo } = await db.from('pronosticos').select('codigo_usuario').eq('partido_id', proximoPartido.id);
+    pronoProximo?.forEach(pr => pronosProximo.add(pr.codigo_usuario));
+  }
 
   let html = `<div class="card"><div class="card-title">🏅 TABLA DE POSICIONES</div>`;
 
@@ -1088,16 +1087,36 @@ async function calcPuntos() {
 async function calcularPuntosTabla(users) {
   const puntos = {};
   users.forEach(u => puntos[u.codigo] = 0);
+
+  // Todas las queries independientes en paralelo, en vez de una por una
+  const [
+    { data: resultados },
+    cfg,
+    { data: gan },
+    { data: preds },
+    { data: aprobaciones },
+  ] = await Promise.all([
+    db.from('resultados').select('*, partidos(*)'),
+    getConfig(),
+    db.from('ganadores').select('*').single(),
+    db.from('predicciones_iniciales').select('*'),
+    db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%'),
+  ]);
+
   // Partidos
-  const { data: resultados } = await db.from('resultados').select('*, partidos(*)');
   if (resultados?.length) {
     const partidoIds = resultados.map(r=>r.partido_id).filter(Boolean);
     if (partidoIds.length) {
       const { data: todosProno } = await db.from('pronosticos').select('*').in('partido_id', partidoIds);
+      const pronoPorPartido = {};
+      todosProno?.forEach(pr => {
+        if (!pronoPorPartido[pr.partido_id]) pronoPorPartido[pr.partido_id] = [];
+        pronoPorPartido[pr.partido_id].push(pr);
+      });
       resultados.forEach(res => {
         const partido = res.partidos;
         if (!partido) return;
-        todosProno?.filter(pr=>pr.partido_id===res.partido_id).forEach(pr => {
+        (pronoPorPartido[res.partido_id] || []).forEach(pr => {
           if (puntos[pr.codigo_usuario] === undefined) return;
           if (partido.es_bonus) {
             if (pr.goles_local==res.goles_local && pr.goles_visitante==res.goles_visitante) { puntos[pr.codigo_usuario]=(puntos[pr.codigo_usuario]||0)+3; return; }
@@ -1111,11 +1130,8 @@ async function calcularPuntosTabla(users) {
       });
     }
   }
+
   // Predicciones iniciales
-  const cfg = await getConfig();
-  const { data: gan } = await db.from('ganadores').select('*').single();
-  const { data: preds } = await db.from('predicciones_iniciales').select('*');
-  const { data: aprobaciones } = await db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%');
   const aprobMap = {}; aprobaciones?.forEach(a => aprobMap[a.clave] = a.valor === 'true');
   const cmp = (a,b) => a&&b&&a.toLowerCase()===b.toLowerCase();
   preds?.forEach(p => {
@@ -1321,16 +1337,12 @@ async function renderAdminUsers() {
     cfg,
     { data: users },
     { data: preds },
-    { data: todosProno },
     { data: todosPartidos },
-    { data: todosResultados },
   ] = await Promise.all([
     getConfig(),
     db.from('usuarios').select('*').order('created_at'),
     db.from('predicciones_iniciales').select('*'),
-    db.from('pronosticos').select('codigo_usuario, partido_id'),
     db.from('partidos').select('*'),
-    db.from('resultados').select('partido_id'),
   ]);
 
   const predAbiertas = cfg.pred_abiertas === 'true';
@@ -1351,10 +1363,13 @@ async function renderAdminUsers() {
   abiertos.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
   const proximoPartido = abiertos[0] || null;
 
-  // Quiénes ya cargaron pronóstico para ese partido específico
-  const pronosProximo = new Set(
-    (todosProno || []).filter(pr => proximoPartido && pr.partido_id === proximoPartido.id).map(pr => pr.codigo_usuario)
-  );
+  // Quiénes ya cargaron pronóstico para ese partido específico — query chica y filtrada
+  // (NUNCA traer toda la tabla pronosticos sin filtro: supera el límite de 1000 filas de Supabase)
+  const pronosProximo = new Set();
+  if (proximoPartido) {
+    const { data: pronoProximo } = await db.from('pronosticos').select('codigo_usuario').eq('partido_id', proximoPartido.id);
+    pronoProximo?.forEach(pr => pronosProximo.add(pr.codigo_usuario));
+  }
 
   let html = `<div class="card"><div class="card-title">👥 USUARIOS REGISTRADOS</div>`;
 
@@ -2433,7 +2448,6 @@ async function recalcularPuntosVerificados() {
     cfg,
     { data: aprobaciones },
     { data: resultados },
-    { data: todosProno },
   ] = await Promise.all([
     db.from('usuarios').select('*'),
     db.from('predicciones_iniciales').select('*'),
@@ -2441,8 +2455,15 @@ async function recalcularPuntosVerificados() {
     getConfig(),
     db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%'),
     db.from('resultados').select('*, partidos(*)'),
-    db.from('pronosticos').select('*'),
   ]);
+
+  // Pronósticos: filtrados solo a los partidos con resultado (nunca traer la tabla entera sin filtro)
+  const partidoIdsConResultado = resultados?.map(r=>r.partido_id).filter(Boolean) || [];
+  let todosProno = [];
+  if (partidoIdsConResultado.length) {
+    const { data } = await db.from('pronosticos').select('*').in('partido_id', partidoIdsConResultado);
+    todosProno = data || [];
+  }
 
   const predMap = {}; preds?.forEach(p => predMap[p.codigo] = p);
   const aprobMap = {}; aprobaciones?.forEach(a => aprobMap[a.clave] = a.valor === 'true');
