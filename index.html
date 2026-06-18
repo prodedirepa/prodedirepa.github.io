@@ -740,16 +740,16 @@ async function renderPartidosUser() {
     const hab = fasesHab[f.id];
     // Recalcular curFaseUser antes de marcar active
     const fasesAbiertas = FASES.filter(f => fasesHab[f.id]);
-    const defaultFase = fasesAbiertas.length ? fasesAbiertas[fasesAbiertas.length - 1].id : null;
+    const defaultFase = fasesAbiertas.length ? fasesAbiertas[0].id : null; // la más temprana habilitada
     const activeId = curFaseUser || defaultFase;
     html += `<button class="fase-pill${!hab?' locked':f.id===activeId?' active':''}" onclick="${hab?`setFaseUser('${f.id}')`:''}">${f.short}</button>`;
   });
   html += `</div><div id="partidos-user-body"></div>`;
   cont.innerHTML = html;
-  // Auto-seleccionar la última fase habilitada (la más reciente abierta)
+  // Auto-seleccionar la fase habilitada más temprana (la primera abierta, no la última)
   if (!curFaseUser) {
     const fasesAbiertas = FASES.filter(f => fasesHab[f.id]);
-    if (fasesAbiertas.length) curFaseUser = fasesAbiertas[fasesAbiertas.length - 1].id;
+    if (fasesAbiertas.length) curFaseUser = fasesAbiertas[0].id;
   }
   await renderPartidosUserFase(fasesHab);
 }
@@ -1013,12 +1013,18 @@ async function renderTabla() {
   // Quién completó predicciones generales
   const predSet = new Set(preds?.map(p => p.codigo));
 
-  // Encontrar el próximo partido sin resultado oficial (el más próximo cronológicamente entre TODOS los partidos)
-  const resSet = new Set(todosResultados?.map(r => r.partido_id));
-  const sinResultado = (todosPartidos || []).filter(p => !resSet.has(p.id));
-  const conHora = sinResultado.filter(p => p.hora_inicio);
-  conHora.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
-  const proximoPartido = conHora[0] || sinResultado[0] || null;
+  // Encontrar el próximo partido a jugarse: el que tenga la hora de cierre más próxima
+  // entre los que TODAVÍA ESTÁN ABIERTOS (no pasó su hora_inicio - 1min). No depende de
+  // si ya se cargó el resultado oficial o no.
+  const ahora = new Date();
+  const abiertos = (todosPartidos || []).filter(p => {
+    if (!p.hora_inicio) return false;
+    const cierre = new Date(p.hora_inicio);
+    cierre.setMinutes(cierre.getMinutes() - 1);
+    return ahora < cierre;
+  });
+  abiertos.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
+  const proximoPartido = abiertos[0] || null;
 
   // Quiénes ya cargaron pronóstico para ese partido específico
   const pronosProximo = new Set(
@@ -1332,12 +1338,18 @@ async function renderAdminUsers() {
   const predSet = new Set(preds?.map(p => p.codigo));
   const puntos = users?.length ? await calcularPuntosTabla(users) : {};
 
-  // Encontrar el próximo partido sin resultado oficial (el más próximo cronológicamente entre TODOS los partidos)
-  const resSet = new Set(todosResultados?.map(r => r.partido_id));
-  const sinResultado = (todosPartidos || []).filter(p => !resSet.has(p.id));
-  const conHora = sinResultado.filter(p => p.hora_inicio);
-  conHora.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
-  const proximoPartido = conHora[0] || sinResultado[0] || null;
+  // Encontrar el próximo partido a jugarse: el que tenga la hora de cierre más próxima
+  // entre los que TODAVÍA ESTÁN ABIERTOS (no pasó su hora_inicio - 1min). No depende de
+  // si ya se cargó el resultado oficial o no.
+  const ahora = new Date();
+  const abiertos = (todosPartidos || []).filter(p => {
+    if (!p.hora_inicio) return false;
+    const cierre = new Date(p.hora_inicio);
+    cierre.setMinutes(cierre.getMinutes() - 1);
+    return ahora < cierre;
+  });
+  abiertos.sort((a, b) => new Date(a.hora_inicio) - new Date(b.hora_inicio));
+  const proximoPartido = abiertos[0] || null;
 
   // Quiénes ya cargaron pronóstico para ese partido específico
   const pronosProximo = new Set(
