@@ -547,8 +547,9 @@ async function login() {
   const codigo = document.getElementById('login-codigo').value.trim();
 
   // Modo mantenimiento: si está activo, bloquea el ingreso de usuarios normales
+  // Excepción: el código 3004 (organizador) siempre puede entrar
   const cfg = await getConfig();
-  if (cfg.mantenimiento_activo === 'true') {
+  if (cfg.mantenimiento_activo === 'true' && codigo !== '3004') {
     showMsg('welcome-msg', '🔧 El prode está en mantenimiento temporalmente. Volvé a intentar en unos minutos.', 'info');
     return;
   }
