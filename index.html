@@ -193,6 +193,23 @@ select option{background:#1a1a24;}
     <div id="ucontent-pronos" style="display:none"></div>
     <div id="ucontent-tabla" style="display:none"></div>
   </div>
+
+  <!-- Botón flotante de feedback -->
+  <button onclick="toggleFeedbackPanel()" id="feedback-btn" style="position:fixed;bottom:20px;left:20px;width:48px;height:48px;border-radius:50%;border:none;background:var(--accent);color:white;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:500;display:none;align-items:center;justify-content:center">💬</button>
+
+  <!-- Panel deslizante de feedback -->
+  <div id="feedback-panel" style="position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px;z-index:600;transform:translateY(100%);transition:transform 0.3s ease;max-width:520px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-weight:700;font-size:1rem">💬 Mensaje al organizador</div>
+      <button onclick="toggleFeedbackPanel()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">Mandá una queja, sugerencia o duda. Solo lo ve Fonti.</p>
+    <textarea id="feedback-text" placeholder="Escribí tu mensaje acá..." style="width:100%;min-height:100px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-family:var(--fb);font-size:0.86rem;resize:vertical;box-sizing:border-box"></textarea>
+    <div id="feedback-msg" style="min-height:20px;margin-top:6px"></div>
+    <button onclick="enviarFeedback()" class="btn btn-primary btn-full" style="margin-top:10px">Enviar mensaje →</button>
+  </div>
+  <!-- Overlay para cerrar el panel -->
+  <div id="feedback-overlay" onclick="toggleFeedbackPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:599"></div>
 </div>
 
 <!-- ADMIN -->
@@ -208,6 +225,7 @@ select option{background:#1a1a24;}
     <button id="atab-pronos" onclick="adminTab('pronos')">👁 Pronósticos</button>
     <button id="atab-tablaadmin" onclick="adminTab('tablaadmin')">🏅 Tabla</button>
     <button id="atab-verificar" onclick="adminTab('verificar')">✏️ Verificar</button>
+    <button id="atab-mensajes" onclick="adminTab('mensajes')" style="position:relative">📬 Mensajes<span id="mensajes-badge" style="display:none;position:absolute;top:4px;right:4px;background:var(--accent);color:white;border-radius:50%;width:16px;height:16px;font-size:0.6rem;font-weight:700;align-items:center;justify-content:center"></span></button>
     <button id="atab-config" onclick="adminTab('config')">⚙️ Config</button>
   </div>
   <div class="container">
@@ -217,6 +235,7 @@ select option{background:#1a1a24;}
     <div id="acontent-pronos" style="display:none"></div>
     <div id="acontent-tablaadmin" style="display:none"></div>
     <div id="acontent-verificar" style="display:none"></div>
+    <div id="acontent-mensajes" style="display:none"></div>
     <div id="acontent-config" style="display:none"></div>
   </div>
 </div>
@@ -347,7 +366,7 @@ select option{background:#1a1a24;}
     </div>
 
     <div style="display:flex;justify-content:center;margin:20px 0">
-      <button id="ck-ball" onclick="clickerEarn()" style="width:140px;height:140px;border-radius:50%;border:none;background:radial-gradient(circle at 35% 30%, #fff, #e8e8e8 45%, #555 100%);font-size:3rem;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.4);transition:transform 0.08s">⚽</button>
+      <button id="ck-ball" onpointerdown="ckBallDown(event)" onpointerup="ckBallUp()" onpointerleave="ckBallUp()" oncontextmenu="return false" style="width:140px;height:140px;border-radius:50%;border:none;background:radial-gradient(circle at 35% 30%, #fff, #e8e8e8 45%, #555 100%);font-size:3rem;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.4);transition:transform 0.08s;user-select:none;-webkit-user-select:none;touch-action:none">⚽</button>
     </div>
 
     <div class="card">
@@ -468,7 +487,7 @@ function goTo(id) {
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
 }
-function logout() { me = null; isAdmin = false; goTo('screen-welcome'); }
+// logout definido en enterUser block arriba
 function showMsg(id, msg, type) {
   const el = document.getElementById(id); if (!el) return;
   el.innerHTML = `<div class="alert alert-${type==='err'?'err':type==='ok'?'ok':'info'}">${msg}</div>`;
@@ -566,6 +585,7 @@ function adminLogin() {
   }
   isAdmin = true;
   goTo('screen-admin'); adminTab('usuarios');
+  checkMensajesBadge(); // verificar si hay mensajes nuevos
 }
 
 // ═══════════════════════════════════════════════
@@ -575,6 +595,22 @@ async function enterUser() {
   document.getElementById('user-hsub').textContent = `${me.nombre} · ${me.codigo}`;
   goTo('screen-user');
   userTab('bienvenida');
+  // Mostrar botón flotante de feedback
+  const btn = document.getElementById('feedback-btn');
+  if (btn) btn.style.display = 'flex';
+}
+
+function logout() {
+  me = null; isAdmin = false;
+  // Ocultar botón flotante y cerrar panel al salir
+  const btn = document.getElementById('feedback-btn');
+  if (btn) btn.style.display = 'none';
+  feedbackOpen = false;
+  const panel = document.getElementById('feedback-panel');
+  if (panel) panel.style.transform = 'translateY(100%)';
+  const overlay = document.getElementById('feedback-overlay');
+  if (overlay) overlay.style.display = 'none';
+  goTo('screen-welcome');
 }
 
 function userTab(t) {
@@ -1295,7 +1331,7 @@ function closeModal() { document.getElementById('modal-detalle').classList.remov
 // ADMIN
 // ═══════════════════════════════════════════════
 function adminTab(t) {
-  ['usuarios','partidos','resultados','pronos','tablaadmin','verificar','config'].forEach(x => {
+  ['usuarios','partidos','resultados','pronos','tablaadmin','verificar','mensajes','config'].forEach(x => {
     document.getElementById(`acontent-${x}`).style.display = x===t?'':'none';
     document.getElementById(`atab-${x}`).className = x===t?'active':'';
   });
@@ -1305,7 +1341,88 @@ function adminTab(t) {
   if (t==='pronos') renderAdminPronos();
   if (t==='tablaadmin') renderAdminTabla();
   if (t==='verificar') renderAdminVerificar();
+  if (t==='mensajes') renderAdminMensajes();
   if (t==='config') renderAdminConfig();
+}
+
+// ── FEEDBACK / MENSAJES ──
+let feedbackOpen = false;
+
+function toggleFeedbackPanel() {
+  feedbackOpen = !feedbackOpen;
+  const panel = document.getElementById('feedback-panel');
+  const overlay = document.getElementById('feedback-overlay');
+  if (panel) panel.style.transform = feedbackOpen ? 'translateY(0)' : 'translateY(100%)';
+  if (overlay) overlay.style.display = feedbackOpen ? 'block' : 'none';
+  if (!feedbackOpen) {
+    document.getElementById('feedback-text').value = '';
+    document.getElementById('feedback-msg').innerHTML = '';
+  }
+}
+
+async function enviarFeedback() {
+  const texto = document.getElementById('feedback-text')?.value?.trim();
+  if (!texto) { showMsg('feedback-msg', 'Escribí algo antes de enviar.', 'err'); return; }
+  const clave = `msg_${Date.now()}_${me.codigo}`;
+  const valor = JSON.stringify({ codigo: me.codigo, nombre: me.nombre, texto, fecha: new Date().toISOString(), leido: false });
+  const { error } = await db.from('configuracion').insert({ clave, valor });
+  if (error) { showMsg('feedback-msg', 'Error al enviar. Intentá de nuevo.', 'err'); return; }
+  document.getElementById('feedback-msg').innerHTML = '<div class="alert alert-ok">✅ ¡Mensaje enviado!</div>';
+  document.getElementById('feedback-text').value = '';
+  setTimeout(() => toggleFeedbackPanel(), 1500);
+}
+
+async function checkMensajesBadge() {
+  const badge = document.getElementById('mensajes-badge');
+  if (!badge) return;
+  try {
+    const { data } = await db.from('configuracion').select('clave, valor').like('clave', 'msg_%');
+    const noLeidos = (data||[]).filter(r => { try { return !JSON.parse(r.valor).leido; } catch { return false; } }).length;
+    if (noLeidos > 0) {
+      badge.textContent = noLeidos > 9 ? '9+' : noLeidos;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {}
+}
+
+async function renderAdminMensajes() {
+  const cont = document.getElementById('acontent-mensajes');
+  cont.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando...</div>';
+  const { data } = await db.from('configuracion').select('clave, valor').like('clave', 'msg_%').order('clave', { ascending: false });
+  if (!data?.length) {
+    cont.innerHTML = '<div class="card"><div class="card-title">📬 MENSAJES</div><div class="empty"><span>📭</span>Sin mensajes todavía</div></div>';
+    return;
+  }
+  const mensajes = data.map(r => { try { return { clave: r.clave, ...JSON.parse(r.valor) }; } catch { return null; } }).filter(Boolean);
+  // Marcar todos como leídos
+  await Promise.all(mensajes.filter(m => !m.leido).map(m => {
+    const val = JSON.stringify({ ...m, leido: true });
+    return db.from('configuracion').update({ valor: val }).eq('clave', m.clave);
+  }));
+  checkMensajesBadge();
+  let html = `<div class="card"><div class="card-title">📬 MENSAJES <span style="font-size:0.72rem;color:var(--muted);font-weight:400">(${mensajes.length})</span></div>`;
+  mensajes.forEach(m => {
+    const fecha = new Date(m.fecha).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const nuevo = !m.leido;
+    html += `<div style="padding:12px 14px;background:${nuevo?'rgba(245,200,66,0.07)':'var(--bg3)'};border:1px solid ${nuevo?'var(--gold)':'var(--border)'};border-radius:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:700;font-size:0.86rem">${m.nombre}</span>
+        <span style="font-size:0.7rem;color:var(--muted)">${fecha}${nuevo?' <span style="color:var(--gold)">● nuevo</span>':''}</span>
+      </div>
+      <p style="font-size:0.84rem;color:var(--text);margin:0;white-space:pre-wrap">${m.texto}</p>
+      <button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="borrarMensaje('${m.clave}')">🗑 Borrar</button>
+    </div>`;
+  });
+  html += `</div>`;
+  cont.innerHTML = html;
+}
+
+async function borrarMensaje(clave) {
+  if (!confirm('¿Borrar este mensaje?')) return;
+  await db.from('configuracion').delete().eq('clave', clave);
+  renderAdminMensajes();
 }
 
 async function renderAdminTabla() {
@@ -3023,19 +3140,34 @@ function fmtMoney(n) {
   return '$' + n.toLocaleString('es-AR');
 }
 
-function clickerEarn() {
+let ckHolding = false;
+let ckHoldTimer = null;
+function clickerEarn(e) {
+  if (e) e.preventDefault();
+  if (ckHolding) return; // bloqueado si está en modo hold
   const gain = ckPerClick();
   ckState.money += gain;
   ckState.totalEarned += gain;
   renderClickerNumbers();
   refreshClickerButtons();
   saveClickerState();
-  // micro-animación del botón
   const ball = document.getElementById('ck-ball');
   if (ball) {
     ball.style.transform = 'scale(0.92)';
     setTimeout(() => { ball.style.transform = 'scale(1)'; }, 80);
   }
+}
+
+function ckBallDown(e) {
+  e.preventDefault();
+  clickerEarn(e);
+  // Si mantiene presionado más de 150ms, se activa el modo hold y bloquea
+  ckHoldTimer = setTimeout(() => { ckHolding = true; }, 150);
+}
+
+function ckBallUp() {
+  clearTimeout(ckHoldTimer);
+  ckHolding = false;
 }
 
 function clickerTick() {
@@ -3551,6 +3683,6 @@ async function render2048Ranking() {
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
-<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.69</div>
+<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.73</div>
 </body>
 </html>
