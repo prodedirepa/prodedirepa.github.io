@@ -1140,17 +1140,20 @@ async function calcularPuntosTabla(users) {
     db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%'),
   ]);
 
-  // Partidos
+  // Partidos — traer pronósticos por usuario en paralelo para evitar el límite de 1000 filas de Supabase
   if (resultados?.length) {
     const partidoIds = resultados.map(r=>r.partido_id).filter(Boolean);
     if (partidoIds.length) {
-      // Limit explícito alto para evitar el corte default de 1000 filas de Supabase
-      // (30 usuarios × ~100 partidos = ~3000 filas máximo en todo el torneo)
-      const { data: todosProno } = await db.from('pronosticos').select('*').in('partido_id', partidoIds).limit(5000);
+      // Fetch separado por usuario para nunca superar el límite de filas
+      const pronosPorUsuario = await Promise.all(
+        users.map(u => db.from('pronosticos').select('*').eq('codigo_usuario', u.codigo).in('partido_id', partidoIds))
+      );
       const pronoPorPartido = {};
-      todosProno?.forEach(pr => {
-        if (!pronoPorPartido[pr.partido_id]) pronoPorPartido[pr.partido_id] = [];
-        pronoPorPartido[pr.partido_id].push(pr);
+      pronosPorUsuario.forEach(({ data }) => {
+        data?.forEach(pr => {
+          if (!pronoPorPartido[pr.partido_id]) pronoPorPartido[pr.partido_id] = [];
+          pronoPorPartido[pr.partido_id].push(pr);
+        });
       });
       resultados.forEach(res => {
         const partido = res.partidos;
@@ -2566,12 +2569,14 @@ async function recalcularPuntosVerificados() {
     db.from('resultados').select('*, partidos(*)'),
   ]);
 
-  // Pronósticos: filtrados solo a los partidos con resultado (nunca traer la tabla entera sin filtro)
+  // Pronósticos: por usuario en paralelo para evitar el límite de 1000 filas de Supabase
   const partidoIdsConResultado = resultados?.map(r=>r.partido_id).filter(Boolean) || [];
   let todosProno = [];
-  if (partidoIdsConResultado.length) {
-    const { data } = await db.from('pronosticos').select('*').in('partido_id', partidoIdsConResultado).limit(5000);
-    todosProno = data || [];
+  if (partidoIdsConResultado.length && usuarios?.length) {
+    const pronosPorUsuario = await Promise.all(
+      usuarios.map(u => db.from('pronosticos').select('*').eq('codigo_usuario', u.codigo).in('partido_id', partidoIdsConResultado))
+    );
+    pronosPorUsuario.forEach(({ data }) => { if (data) todosProno.push(...data); });
   }
 
   const predMap = {}; preds?.forEach(p => predMap[p.codigo] = p);
@@ -3685,6 +3690,6 @@ async function render2048Ranking() {
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
-<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.74</div>
+<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.75</div>
 </body>
 </html>
