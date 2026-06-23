@@ -224,7 +224,7 @@ select option{background:#1a1a24;}
     <button id="atab-resultados" onclick="adminTab('resultados')">✅ Resultados</button>
     <button id="atab-pronos" onclick="adminTab('pronos')">👁 Pronósticos</button>
     <button id="atab-tablaadmin" onclick="adminTab('tablaadmin')">🏅 Tabla</button>
-    <button id="atab-verificar" onclick="adminTab('verificar')">✏️ Verificar</button>
+    <button id="atab-verificar" onclick="adminTab('verificar')">✏️ Corregir</button>
     <button id="atab-mensajes" onclick="adminTab('mensajes')" style="position:relative">📬 Mensajes<span id="mensajes-badge" style="display:none;position:absolute;top:4px;right:4px;background:var(--accent);color:white;border-radius:50%;width:16px;height:16px;font-size:0.6rem;font-weight:700;align-items:center;justify-content:center"></span></button>
     <button id="atab-config" onclick="adminTab('config')">⚙️ Config</button>
   </div>
@@ -1131,13 +1131,11 @@ async function calcularPuntosTabla(users) {
     cfg,
     { data: gan },
     { data: preds },
-    { data: aprobaciones },
   ] = await Promise.all([
     db.from('resultados').select('*, partidos(*)'),
     getConfig(),
     db.from('ganadores').select('*').single(),
     db.from('predicciones_iniciales').select('*'),
-    db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%'),
   ]);
 
   // Partidos — traer pronósticos por usuario en paralelo para evitar el límite de 1000 filas de Supabase
@@ -1173,18 +1171,15 @@ async function calcularPuntosTabla(users) {
     }
   }
 
-  // Predicciones iniciales
-  const aprobMap = {}; aprobaciones?.forEach(a => aprobMap[a.clave] = a.valor === 'true');
-  const cmp = (a,b) => a&&b&&a.toLowerCase()===b.toLowerCase();
+  // Predicciones iniciales — comparación directa de texto (case-insensitive)
+  const cmp = (a,b) => a&&b&&a.toLowerCase().trim()===b.toLowerCase().trim();
   preds?.forEach(p => {
-    // Campeon y subcampeon — automáticos
     if (cmp(p.campeon, gan?.campeon)) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_campeon||10);
     if (cmp(p.subcampeon, gan?.subcampeon)) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_subcampeon||6);
-    // Campos de texto libre — usar aprobaciones manuales
-    if (aprobMap[`aprobado_sorpresa_${p.codigo}`]) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_sorpresa||5);
-    if (aprobMap[`aprobado_decepcion_${p.codigo}`]) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_decepcion||5);
-    if (aprobMap[`aprobado_goleador_${p.codigo}`]) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_goleador||8);
-    if (aprobMap[`aprobado_mejor_jugador_${p.codigo}`]) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_mejor||8);
+    if (cmp(p.sorpresa, gan?.sorpresa)) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_sorpresa||5);
+    if (cmp(p.decepcion, gan?.decepcion)) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_decepcion||5);
+    if (cmp(p.goleador, gan?.goleador)) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_goleador||8);
+    if (cmp(p.mejor_jugador, gan?.mejor_jugador)) puntos[p.codigo]=(puntos[p.codigo]||0)+parseInt(cfg.pts_mejor||8);
   });
   return puntos;
 }
@@ -2481,49 +2476,48 @@ async function renderAdminVerificar() {
     { data: usuarios },
     { data: preds },
     cfg,
-    { data: aprobaciones },
   ] = await Promise.all([
     db.from('usuarios').select('*').order('nombre'),
     db.from('predicciones_iniciales').select('*'),
     getConfig(),
-    db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%'),
   ]);
 
   const predMap = {}; preds?.forEach(p => predMap[p.codigo] = p);
-  const aprobMap = {}; aprobaciones?.forEach(a => aprobMap[a.clave] = a.valor === 'true');
+
+  const CAMPOS = [
+    { k: 'sorpresa',      label: '🧤 Mejor Arquero',          pts: cfg.pts_sorpresa||5  },
+    { k: 'decepcion',     label: '⭐ Jugador Joven Sub-21',    pts: cfg.pts_decepcion||5 },
+    { k: 'goleador',      label: '👟 Goleador',               pts: cfg.pts_goleador||8  },
+    { k: 'mejor_jugador', label: '⭐ Mejor Jugador',           pts: cfg.pts_mejor||8     },
+  ];
 
   let html = `<div class="card">
-    <div class="card-title">✏️ VERIFICAR PREDICCIONES INICIALES</div>
+    <div class="card-title">✏️ CORREGIR PREDICCIONES</div>
     <p style="font-size:0.8rem;color:var(--muted);margin-bottom:16px">
-      Campeón y Subcampeón se verifican automáticamente. Los campos de texto libre los aprobás vos manualmente.
-      Los cambios se guardan al instante.
+      Normalizá los nombres que pusieron los usuarios para que la comparación automática funcione.
+      Por ejemplo: cambiá "Dibu" por "Emiliano Martinez". Los cambios se guardan al instante.
     </p>`;
 
   if (!usuarios?.length) {
     html += `<div class="empty"><span>👤</span>Sin usuarios</div>`;
   } else {
-    CAMPOS_VERIFICAR.forEach(campo => {
-      const pts = parseInt(cfg[campo.cfg]||5);
+    CAMPOS.forEach(campo => {
       html += `<div style="margin-bottom:24px">
-        <h4 style="font-size:0.8rem;font-weight:700;color:var(--gold);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">${campo.label} <span class="pts-chip">+${pts} pts</span></h4>
+        <h4 style="font-size:0.8rem;font-weight:700;color:var(--gold);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">${campo.label} <span class="pts-chip">+${campo.pts} pts</span></h4>
         <div style="display:flex;flex-direction:column;gap:6px">`;
 
       usuarios.forEach(u => {
         const pred = predMap[u.codigo];
-        const valor = pred?.[campo.k] || '–';
-        const aprobKey = `aprobado_${campo.k}_${u.codigo}`;
-        const aprobado = aprobMap[aprobKey] === true;
-        const sinPred = !pred?.[campo.k];
+        const valor = pred?.[campo.k] || '';
+        const sinPred = !pred;
 
-        html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg3);border-radius:10px;border:1px solid ${aprobado?'var(--green)':'var(--border)'}">
-          <span style="flex:1;font-weight:600;font-size:0.85rem">${u.nombre}</span>
-          <span style="flex:1;font-size:0.83rem;color:${sinPred?'var(--muted)':'var(--text)'}">${valor}</span>
-          <label style="display:flex;align-items:center;gap:6px;cursor:${sinPred?'not-allowed':'pointer'};margin:0;text-transform:none;font-size:0.8rem;color:${aprobado?'var(--green)':'var(--muted)'}">
-            <input type="checkbox" ${aprobado?'checked':''} ${sinPred?'disabled':''}
-              onchange="toggleAprobacion('${campo.k}','${u.codigo}',this.checked)"
-              style="width:16px;height:16px;accent-color:var(--green);cursor:${sinPred?'not-allowed':'pointer'}">
-            ${aprobado?'✓ Aprobado':'Aprobar'}
-          </label>
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+          <span style="width:120px;font-weight:600;font-size:0.84rem;flex-shrink:0">${u.nombre}</span>
+          <input type="text" value="${valor.replace(/"/g,'&quot;')}"
+            placeholder="${sinPred ? '(sin predicción)' : 'Escribí el nombre normalizado'}"
+            ${sinPred ? 'disabled' : ''}
+            onchange="corregirPrediccion('${u.codigo}','${campo.k}',this.value)"
+            style="flex:1;font-size:0.82rem;${sinPred?'opacity:0.4;cursor:not-allowed':''}">
         </div>`;
       });
 
@@ -2531,107 +2525,29 @@ async function renderAdminVerificar() {
     });
   }
 
-  html += `<button class="btn btn-green btn-full" onclick="recalcularPuntosVerificados()">🔄 Recalcular puntos con aprobaciones</button>
-    <div id="verificar-msg"></div>
-  </div>`;
+  html += `<div id="verificar-msg"></div></div>`;
   cont.innerHTML = html;
 }
 
-async function toggleAprobacion(campo, codigo, aprobado) {
-  const key = `aprobado_${campo}_${codigo}`;
-  await setConfig(key, aprobado ? 'true' : 'false');
-  // Feedback visual inmediato sin recargar toda la vista
-  const row = event.target.closest('div[style*="border-radius:10px"]');
-  if (row) {
-    row.style.borderColor = aprobado ? 'var(--green)' : 'var(--border)';
-    const lbl = event.target.closest('label');
-    if (lbl) { lbl.style.color = aprobado ? 'var(--green)' : 'var(--muted)'; lbl.lastChild.textContent = aprobado ? ' ✓ Aprobado' : ' Aprobar'; }
-  }
-}
-
-async function recalcularPuntosVerificados() {
-  const btn = document.querySelector('#acontent-verificar .btn-green');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando...'; }
-
-  const [
-    { data: usuarios },
-    { data: preds },
-    { data: gan },
-    cfg,
-    { data: aprobaciones },
-    { data: resultados },
-  ] = await Promise.all([
-    db.from('usuarios').select('*'),
-    db.from('predicciones_iniciales').select('*'),
-    db.from('ganadores').select('*').single(),
-    getConfig(),
-    db.from('configuracion').select('clave,valor').like('clave', 'aprobado_%'),
-    db.from('resultados').select('*, partidos(*)'),
-  ]);
-
-  // Pronósticos: por usuario en paralelo para evitar el límite de 1000 filas de Supabase
-  const partidoIdsConResultado = resultados?.map(r=>r.partido_id).filter(Boolean) || [];
-  let todosProno = [];
-  if (partidoIdsConResultado.length && usuarios?.length) {
-    const pronosPorUsuario = await Promise.all(
-      usuarios.map(u => db.from('pronosticos').select('*').eq('codigo_usuario', u.codigo).in('partido_id', partidoIdsConResultado))
-    );
-    pronosPorUsuario.forEach(({ data }) => { if (data) todosProno.push(...data); });
-  }
-
-  const predMap = {}; preds?.forEach(p => predMap[p.codigo] = p);
-  const aprobMap = {}; aprobaciones?.forEach(a => aprobMap[a.clave] = a.valor === 'true');
-  const pronoMap = {}; todosProno?.forEach(p => {
-    if (!pronoMap[p.codigo_usuario]) pronoMap[p.codigo_usuario] = {};
-    pronoMap[p.codigo_usuario][p.partido_id] = p;
-  });
-  const cmp = (a,b) => a&&b&&a.toLowerCase()===b.toLowerCase();
-  const pts_cfg = {
-    campeon: parseInt(cfg.pts_campeon||10), subcampeon: parseInt(cfg.pts_subcampeon||6),
-    sorpresa: parseInt(cfg.pts_sorpresa||5), decepcion: parseInt(cfg.pts_decepcion||5),
-    goleador: parseInt(cfg.pts_goleador||8), mejor: parseInt(cfg.pts_mejor||8),
-  };
-
-  const puntos = {};
-  usuarios?.forEach(u => {
-    puntos[u.codigo] = 0;
-    const pred = predMap[u.codigo] || {};
-
-    // Campeón y subcampeón — automáticos
-    if (cmp(pred.campeon, gan?.campeon)) puntos[u.codigo] += pts_cfg.campeon;
-    if (cmp(pred.subcampeon, gan?.subcampeon)) puntos[u.codigo] += pts_cfg.subcampeon;
-
-    // Campos manuales — usar aprobaciones
-    if (aprobMap[`aprobado_sorpresa_${u.codigo}`]) puntos[u.codigo] += pts_cfg.sorpresa;
-    if (aprobMap[`aprobado_decepcion_${u.codigo}`]) puntos[u.codigo] += pts_cfg.decepcion;
-    if (aprobMap[`aprobado_goleador_${u.codigo}`]) puntos[u.codigo] += pts_cfg.goleador;
-    if (aprobMap[`aprobado_mejor_jugador_${u.codigo}`]) puntos[u.codigo] += pts_cfg.mejor;
-
-    // Partidos
-    const partidoIds = resultados?.map(r=>r.partido_id).filter(Boolean) || [];
-    if (partidoIds.length) {
-      resultados?.forEach(res => {
-        const partido = res.partidos; if (!partido) return;
-        const pr = pronoMap[u.codigo]?.[res.partido_id]; if (!pr) return;
-        if (partido.es_bonus) {
-          if (pr.goles_local==res.goles_local && pr.goles_visitante==res.goles_visitante) { puntos[u.codigo] += 3; return; }
-          const rs=res.goles_local>res.goles_visitante?'1':res.goles_local<res.goles_visitante?'2':'x';
-          const ps=(pr.goles_local||0)>(pr.goles_visitante||0)?'1':(pr.goles_local||0)<(pr.goles_visitante||0)?'2':'x';
-          if (rs===ps) puntos[u.codigo] += 1;
-        } else {
-          if (pr.resultado===res.resultado) puntos[u.codigo] += 1;
-        }
-      });
+async function corregirPrediccion(codigo, campo, valor) {
+  const trimmed = valor.trim();
+  try {
+    // Upsert: si ya tiene predicción la actualiza, sino la crea
+    const { data: existing } = await db.from('predicciones_iniciales').select('codigo').eq('codigo', codigo).single();
+    if (existing) {
+      await db.from('predicciones_iniciales').update({ [campo]: trimmed }).eq('codigo', codigo);
+    } else {
+      await db.from('predicciones_iniciales').insert({ codigo, [campo]: trimmed });
     }
-  });
-
-  // Guardar puntos — los guardamos en configuracion como puntos_usuario_CODIGO
-  await Promise.all(
-    Object.entries(puntos).map(([codigo, pts]) => setConfig(`puntos_usuario_${codigo}`, String(pts)))
-  );
-
-  showMsg('verificar-msg', '✅ Puntos recalculados correctamente!', 'ok');
-  if (btn) { btn.disabled = false; btn.textContent = '🔄 Recalcular puntos con aprobaciones'; }
+    // Feedback visual sutil en el input
+    const inputs = document.querySelectorAll(`#acontent-verificar input`);
+    // no hay ID único por input, el feedback se da con un flash del borde
+    event.target.style.borderColor = 'var(--green)';
+    setTimeout(() => { event.target.style.borderColor = ''; }, 1000);
+  } catch (e) {
+    event.target.style.borderColor = 'var(--accent)';
+    console.error('Error al corregir:', e);
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -3690,6 +3606,6 @@ async function render2048Ranking() {
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
-<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.75</div>
+<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.76</div>
 </body>
 </html>
