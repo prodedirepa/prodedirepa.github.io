@@ -1794,12 +1794,6 @@ async function renderAdminConfig() {
     <div class="alert ${mantenimiento?'alert-err':'alert-ok'}" style="margin-top:8px">Estado actual: <b>${mantenimiento?'🔧 Mantenimiento ACTIVO — usuarios bloqueados':'🟢 Acceso normal habilitado'}</b></div>
   </div>
   <div class="card"><div class="card-title">⚙️ CONFIGURACIÓN</div>
-    <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🔒 Predicciones Iniciales</h4>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-green" style="flex:1" onclick="setPredOpen(true)">🟢 Abrir</button>
-      <button class="btn btn-danger" style="flex:1" onclick="setPredOpen(false)">🔴 Cerrar</button>
-    </div>
-    <div class="alert alert-info" style="margin-top:8px">Estado actual: <b>${open?'🟢 Abiertas':'🔴 Cerradas'}</b></div>
     <div class="divider"></div>
     <h4 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">📅 Fases Habilitadas</h4>`;
   FASES.forEach(f => {
@@ -3606,6 +3600,6 @@ async function render2048Ranking() {
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
-<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.76</div>
+<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.78</div>
 </body>
 </html>
