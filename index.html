@@ -693,6 +693,7 @@ async function renderBienvenida() {
         </div>
         <p style="font-size:0.76rem;color:var(--muted);margin-top:8px">Cada partido cierra automáticamente <b style="color:var(--text)">1 minuto antes</b> de su hora de inicio. En cada fecha hay uno o más partidos <b style="color:var(--gold)">⭐ Bonus</b> donde hay que adivinar el resultado exacto.</p>
         <p style="font-size:0.76rem;color:var(--muted);margin-top:6px">📌 A partir de <b style="color:var(--gold)">Octavos de Final</b> en adelante, <b style="color:var(--text)">todos los partidos son Bonus</b>.</p>
+        <p style="font-size:0.76rem;color:var(--muted);margin-top:6px">⏱ El resultado exacto se cuenta al <b style="color:var(--text)">final del tiempo reglamentario (90 min)</b>, sin incluir tiempo extra ni penales.</p>
       </div>
     </div>
     <button class="btn btn-primary btn-full" onclick="userTab('pred')" style="margin-bottom:10px">🎯 Ir a mis predicciones →</button>
@@ -883,7 +884,8 @@ async function renderPartidosUserFase(fasesHab) {
         <button class="res-btn ${s2}" onclick="setPredLocal(${p.id},'2')"${locked?' disabled':''}>${p.visitante}</button>
       </div>`;
     } else {
-      html += `<p style="font-size:0.74rem;color:var(--muted);margin-bottom:6px">Resultado exacto <span class="pts-chip">+3 pts</span></p>
+      html += `<p style="font-size:0.74rem;color:var(--muted);margin-bottom:2px">Resultado exacto <span class="pts-chip">+3 pts</span></p>
+      <p style="font-size:0.7rem;color:var(--muted);margin-bottom:6px;opacity:0.7">⏱ Solo tiempo reglamentario (90 min), sin incluir tiempo extra ni penales.</p>
       <div class="exact-row">
         <input type="number" min="0" max="20" value="${localPred.goles_local??''}" placeholder="0" id="bg1-${p.id}"${locked?' disabled':''} oninput="setBonusLocal(${p.id})">
         <span class="sep">–</span>
@@ -3600,6 +3602,6 @@ async function render2048Ranking() {
 
 // Pantalla inicial: login directo (registro deshabilitado, prode ya en curso)
 </script>
-<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.78</div>
+<div style="position:fixed;bottom:4px;right:6px;font-size:0.62rem;color:rgba(255,255,255,0.35);z-index:9999;pointer-events:none;font-family:var(--fm)">v1.79</div>
 </body>
 </html>
